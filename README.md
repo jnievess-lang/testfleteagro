@@ -13,7 +13,7 @@ Cotizador y simulador de fletes para productoras agrícolas sobre rutas reales. 
 
 | Uso | Servicio |
 | --- | --- |
-| Mapa | [Leaflet](https://leafletjs.com/) con mosaicos de [CARTO](https://carto.com/attributions) sobre datos de [OpenStreetMap](https://www.openstreetmap.org/copyright) |
+| Mapa | [Leaflet](https://leafletjs.com/) con mosaicos estándar de [OpenStreetMap](https://www.openstreetmap.org/copyright) |
 | Sugerencias de lugares | [Photon](https://photon.komoot.io/) (komoot) |
 | Rutas por carretera | [OSRM](https://project-osrm.org/) (servidor de demostración; respaldo: routing.openstreetmap.de) |
 

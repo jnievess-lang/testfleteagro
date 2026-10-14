@@ -54,7 +54,8 @@
   --label-ink: #0F2A42;
   --label-muted: #557089;
   --label-line: #C3D7E5;
-  --tiles: light;
+  --tile-filter: grayscale(1) brightness(1.03) contrast(0.92);
+  --tile-blend: multiply;
 
   /* Tipografía */
   --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
@@ -93,7 +94,8 @@
     --label-ink: #E3EEF6;
     --label-muted: #8EABC2;
     --label-line: #27496A;
-    --tiles: dark;
+    --tile-filter: grayscale(1) invert(1) brightness(0.72) contrast(1.15);
+    --tile-blend: screen;
     color-scheme: dark;
   }
 }
@@ -126,7 +128,8 @@
   --label-ink: #E3EEF6;
   --label-muted: #8EABC2;
   --label-line: #27496A;
-  --tiles: dark;
+  --tile-filter: grayscale(1) invert(1) brightness(0.72) contrast(1.15);
+  --tile-blend: screen;
   color-scheme: dark;
 }
 
@@ -307,6 +310,8 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 
 /* Leaflet con los tokens de la página */
 .leaflet-container { font-family: var(--font-body); background: var(--map-bg); }
+/* Mosaicos de OpenStreetMap en gris, teñidos con el fondo de la paleta */
+.leaflet-tile-pane { filter: var(--tile-filter); mix-blend-mode: var(--tile-blend); }
 .leaflet-bar a, .leaflet-bar a:hover { background: var(--surface); color: var(--ink); border-bottom-color: var(--line); }
 .leaflet-bar { border: 1px solid var(--line-strong) !important; box-shadow: none !important; }
 .leaflet-control-attribution { font-size: 10.5px; background: var(--label-bg) !important; color: var(--label-muted); opacity: 0.92; }
@@ -608,7 +613,7 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
   </div>
 </main>
 
-<p class="credits">Mapa © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">colaboradores de OpenStreetMap</a> y <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> · Rutas por <a href="https://project-osrm.org/" target="_blank" rel="noopener">OSRM</a> · Búsqueda de lugares por <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>. Requiere conexión a internet.</p>
+<p class="credits">Mapa © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">colaboradores de OpenStreetMap</a> · Rutas por <a href="https://project-osrm.org/" target="_blank" rel="noopener">OSRM</a> · Búsqueda de lugares por <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>. Requiere conexión a internet.</p>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -1074,16 +1079,14 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
   let stopMarkers = [], truckMarkers = [];
   const hasLeaflet = typeof window.L !== 'undefined';
 
-  function tileUrl() {
-    const t = getComputedStyle(document.documentElement).getPropertyValue('--tiles').trim();
-    return `https://{s}.basemaps.cartocdn.com/${t === 'dark' ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`;
-  }
+  // Mosaicos estándar de OpenStreetMap (sin clave); el tema se aplica con filtros CSS
+  const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
   function initMap() {
     if (!hasLeaflet) return;
     map = L.map('leaflet', { zoomControl: true, worldCopyJump: true }).setView([20.6, -101.8], 7);
-    tiles = L.tileLayer(tileUrl(), {
-      subdomains: 'abcd', maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a> · OSRM'
+    tiles = L.tileLayer(TILE_URL, {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · OSRM'
     }).addTo(map);
     map.attributionControl.setPrefix(false);
     previewGroup = L.layerGroup().addTo(map);
@@ -1544,8 +1547,8 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
     setTimeout(() => { btn.textContent = 'Copiar resumen'; }, 1800);
   });
 
-  // Tema: cambiar los mosaicos del mapa entre claro y oscuro
-  function retheme() { if (tiles) tiles.setUrl(tileUrl()); dirty = true; }
+  // Tema: los mosaicos cambian solos por CSS; solo hay que redibujar
+  function retheme() { dirty = true; }
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', retheme);
   new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
