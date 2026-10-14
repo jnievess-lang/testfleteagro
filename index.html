@@ -5,13 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>FleteAgro</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Cotizador y simulador de fletes para productoras agrícolas.">
+<meta name="description" content="Cotizador y simulador de fletes para productoras agrícolas sobre rutas reales.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-/* Layout: formulario de flete por pasos a la izquierda; a la derecha el mapa de simulación
-   arriba, cotización + bitácora debajo y el historial de fletes al final. */
+/* Layout: formulario de flete por pasos a la izquierda; a la derecha el mapa real con la
+   simulación arriba, cotización + bitácora debajo y el historial de fletes al final. */
 :root {
   /* Paleta de marca */
   --sky: #C0DCEE;
@@ -31,6 +32,7 @@
   --accent: var(--steel);
   --accent-strong: var(--deep);
   --on-accent: #FFFFFF;
+  --shadow: 0 10px 30px rgba(15, 42, 66, 0.14);
 
   /* Estados */
   --ok: #2F7D62;
@@ -41,21 +43,18 @@
 
   /* Mapa */
   --map-bg: #EEF5FA;
-  --map-parcel-1: #DDEBF5;
-  --map-parcel-2: #C0DCEE;
-  --map-parcel-3: #E6F0F7;
-  --map-rows: #3D76A8;
-  --map-water: #86C3DB;
-  --map-road: #FFFFFF;
-  --map-road-edge: #B9D3E6;
+  --route-edge: #FFFFFF;
   --route-todo: #5C95CE;
   --route-done: #1A4C76;
   --truck-body: #1A4C76;
   --truck-cab: #5C95CE;
+  --truck-win: #C0DCEE;
+  --halo: rgba(61, 118, 168, 0.22);
   --label-bg: #FFFFFF;
   --label-ink: #0F2A42;
   --label-muted: #557089;
   --label-line: #C3D7E5;
+  --tiles: light;
 
   /* Tipografía */
   --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
@@ -76,27 +75,25 @@
     --accent: #86C3DB;
     --accent-strong: #C0DCEE;
     --on-accent: #0A1826;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
     --ok: #5CC4A0;
     --warn: #E3B162;
     --warn-bg: #2B2414;
     --danger: #E57F76;
     --info-bg: #14304A;
     --map-bg: #0C1F31;
-    --map-parcel-1: #112A41;
-    --map-parcel-2: #17344F;
-    --map-parcel-3: #0F263B;
-    --map-rows: #86C3DB;
-    --map-water: #3D76A8;
-    --map-road: #1E3E5C;
-    --map-road-edge: #091725;
+    --route-edge: #0A1826;
     --route-todo: #5C95CE;
     --route-done: #C0DCEE;
     --truck-body: #C0DCEE;
     --truck-cab: #86C3DB;
+    --truck-win: #1A4C76;
+    --halo: rgba(134, 195, 219, 0.25);
     --label-bg: #0F2234;
     --label-ink: #E3EEF6;
     --label-muted: #8EABC2;
     --label-line: #27496A;
+    --tiles: dark;
     color-scheme: dark;
   }
 }
@@ -111,31 +108,30 @@
   --accent: #86C3DB;
   --accent-strong: #C0DCEE;
   --on-accent: #0A1826;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   --ok: #5CC4A0;
   --warn: #E3B162;
   --warn-bg: #2B2414;
   --danger: #E57F76;
   --info-bg: #14304A;
   --map-bg: #0C1F31;
-  --map-parcel-1: #112A41;
-  --map-parcel-2: #17344F;
-  --map-parcel-3: #0F263B;
-  --map-rows: #86C3DB;
-  --map-water: #3D76A8;
-  --map-road: #1E3E5C;
-  --map-road-edge: #091725;
+  --route-edge: #0A1826;
   --route-todo: #5C95CE;
   --route-done: #C0DCEE;
   --truck-body: #C0DCEE;
   --truck-cab: #86C3DB;
+  --truck-win: #1A4C76;
+  --halo: rgba(134, 195, 219, 0.25);
   --label-bg: #0F2234;
   --label-ink: #E3EEF6;
   --label-muted: #8EABC2;
   --label-line: #27496A;
+  --tiles: dark;
   color-scheme: dark;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
@@ -151,13 +147,8 @@ button { font: inherit; }
 
 /* Encabezado */
 .top {
-  max-width: 1360px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+  max-width: 1360px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
   padding-block: 22px 20px;
 }
 .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -171,23 +162,15 @@ button { font: inherit; }
 
 /* Rejilla principal */
 .layout {
-  max-width: 1360px;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: minmax(300px, 390px) minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
+  max-width: 1360px; margin: 0 auto;
+  display: grid; grid-template-columns: minmax(300px, 390px) minmax(0, 1fr); gap: 20px; align-items: start;
 }
 @media (max-width: 980px) { .layout { grid-template-columns: minmax(0, 1fr); } }
-
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
 
 /* Formulario */
-.panel { padding: 20px; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
-.sample-note {
-  font-size: 13px; color: var(--muted); background: var(--info-bg);
-  border-radius: 10px; padding: 9px 12px; margin: 0;
-}
+.panel { padding: 20px; display: flex; flex-direction: column; gap: 24px; min-width: 0; position: relative; z-index: 2; }
+.sample-note { font-size: 13px; color: var(--muted); background: var(--info-bg); border-radius: 10px; padding: 9px 12px; margin: 0; }
 .step { display: flex; flex-direction: column; gap: 12px; border: 0; padding: 0; margin: 0; min-width: 0; }
 .step-h { display: flex; align-items: baseline; gap: 10px; padding: 0; margin-bottom: 12px; }
 .step-n { font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-weight: 500; }
@@ -195,21 +178,16 @@ button { font: inherit; }
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .grid2 .wide { grid-column: 1 / -1; }
 .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.lbl, .field > label {
-  font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--muted); font-weight: 600;
-}
+.lbl, .field > label { font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 .hint { font-size: 12px; color: var(--muted); }
 input, select {
   font: inherit; font-size: 14.5px; color: var(--ink); background: var(--surface);
-  border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 10px;
-  width: 100%; min-width: 0;
+  border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 10px; width: 100%; min-width: 0;
 }
 input[type="number"] { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
 input:hover, select:hover { border-color: var(--cornflower); }
-input:focus-visible, select:focus-visible, button:focus-visible {
-  outline: 2px solid var(--accent); outline-offset: 1px;
-}
+input:disabled { opacity: 0.6; cursor: not-allowed; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .unit { position: relative; }
 .unit input { padding-right: 52px; }
 .unit span {
@@ -221,8 +199,8 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .veh input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
 .veh-box {
   display: flex; flex-direction: column; gap: 3px; height: 100%;
-  padding: 10px 11px; border: 1px solid var(--line-strong); border-radius: 10px;
-  cursor: pointer; transition: border-color .15s, background-color .15s;
+  padding: 10px 11px; border: 1px solid var(--line-strong); border-radius: 10px; cursor: pointer;
+  transition: border-color .15s, background-color .15s;
 }
 .veh-box:hover { border-color: var(--cornflower); }
 .veh input:checked + .veh-box { border-color: var(--accent-strong); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--accent-strong); }
@@ -250,38 +228,111 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .form-msg { font-size: 13.5px; color: var(--danger); margin: 0; }
 .form-msg:empty { display: none; }
 
+/* Autocompletado de lugares */
+.combo-wrap { position: relative; }
+.combo-wrap input { padding-left: 32px; }
+.combo-wrap .ico {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px;
+  border-radius: 50%; pointer-events: none;
+}
+.ico.o { border: 3px solid var(--route-done); background: var(--surface); }
+.ico.d { background: var(--route-done); box-shadow: inset 0 0 0 3px var(--surface), 0 0 0 1.5px var(--route-done); }
+.ico.s { border-radius: 3px; border: 2px solid var(--warn); width: 12px; height: 12px; left: 11px; }
+.combo-list {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 50;
+  margin: 0; padding: 4px; list-style: none; max-height: 290px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: var(--shadow);
+}
+.combo-opt { display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; border-radius: 7px; cursor: pointer; }
+.combo-opt[aria-selected="true"], .combo-opt:hover { background: var(--surface-2); }
+.o-name { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+.o-kind { font-weight: 500; font-size: 11px; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 999px; padding: 0 6px; margin-left: 6px; white-space: nowrap; }
+.o-ctx { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.combo-msg { padding: 9px 10px; font-size: 13px; color: var(--muted); }
+.combo-hint { min-height: 18px; }
+.combo-hint.ok { color: var(--ok); }
+.combo-hint .coords { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.chips { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.chips:empty { display: none; }
+.chip {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 8px;
+  padding: 4px 4px 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); font-size: 13.5px;
+}
+.chip .n { font-family: var(--font-mono); font-size: 11.5px; color: var(--warn); font-weight: 500; }
+.chip .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip .t small { color: var(--muted); }
+.chip button {
+  border: 0; background: none; color: var(--muted); cursor: pointer; width: 30px; height: 30px; border-radius: 6px; font-size: 18px; line-height: 1;
+}
+.chip button:hover { background: var(--surface); color: var(--danger); }
+.route-info {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-size: 13px; padding: 9px 12px; border-radius: 10px; background: var(--info-bg); color: var(--muted);
+}
+.route-info strong { color: var(--ink); font-family: var(--font-mono); font-weight: 500; font-size: 14px; }
+.route-info[data-s="error"] { background: var(--warn-bg); color: var(--ink); }
+
 /* Columna principal */
 .main { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .sim { overflow: hidden; }
-.sim-head {
-  display: flex; justify-content: space-between; align-items: center; gap: 10px 16px;
-  padding: 16px 18px; flex-wrap: wrap;
-}
+.sim-head { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; padding: 16px 18px; flex-wrap: wrap; }
 .sim-head > div { min-width: 0; }
 .eyebrow { font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
-.route-title {
-  font-family: var(--font-display); font-weight: 500; font-size: 21px; line-height: 1.2;
-  margin: 2px 0 0; letter-spacing: -0.01em; overflow-wrap: anywhere;
-}
+.route-title { font-family: var(--font-display); font-weight: 500; font-size: 21px; line-height: 1.2; margin: 2px 0 0; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .route-title .arrow { color: var(--cornflower); padding: 0 4px; }
 .pill {
   display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
-  font-size: 13px; font-weight: 600; padding: 5px 11px; border-radius: 999px;
-  background: var(--surface-2); color: var(--ink);
+  font-size: 13px; font-weight: 600; padding: 5px 11px; border-radius: 999px; background: var(--surface-2); color: var(--ink);
 }
 .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--dot, var(--muted)); }
 .pill[data-s="drive"] { --dot: var(--cornflower); }
 .pill[data-s="stop"] { --dot: var(--warn); }
 .pill[data-s="done"] { --dot: var(--ok); }
-.map { position: relative; aspect-ratio: 16 / 9; max-width: 100%; background: var(--map-bg); border-block: 1px solid var(--line); }
-.map canvas { display: block; width: 100%; height: 100%; }
+.map { position: relative; isolation: isolate; aspect-ratio: 16 / 9; max-width: 100%; min-height: 320px; background: var(--map-bg); border-block: 1px solid var(--line); }
+#leaflet { position: absolute; inset: 0; }
+@media (max-width: 640px) { .map { aspect-ratio: 4 / 5; } }
+.map-overlay { position: absolute; z-index: 1000; pointer-events: none; }
 .convoy-note {
-  position: absolute; left: 12px; bottom: 12px; margin: 0;
-  font-size: 12px; background: var(--label-bg); color: var(--label-ink);
-  border: 1px solid var(--label-line); border-radius: 8px; padding: 5px 9px;
-  font-variant-numeric: tabular-nums; max-width: calc(100% - 24px);
+  left: 56px; top: 12px; margin: 0; font-size: 12px; background: var(--label-bg); color: var(--label-ink);
+  border: 1px solid var(--label-line); border-radius: 8px; padding: 5px 9px; max-width: calc(100% - 72px);
 }
-@media (max-width: 640px) { .map { aspect-ratio: 4 / 3; } }
+.map-msg { inset: 0; display: grid; place-items: center; padding: 16px; }
+.map-msg > div {
+  pointer-events: auto; max-width: 360px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  background: var(--label-bg); color: var(--label-ink); border: 1px solid var(--label-line); border-radius: 12px;
+  padding: 14px 18px; font-size: 14px; box-shadow: var(--shadow);
+}
+.spinner { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--line-strong); border-top-color: var(--accent-strong); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Leaflet con los tokens de la página */
+.leaflet-container { font-family: var(--font-body); background: var(--map-bg); }
+.leaflet-bar a, .leaflet-bar a:hover { background: var(--surface); color: var(--ink); border-bottom-color: var(--line); }
+.leaflet-bar { border: 1px solid var(--line-strong) !important; box-shadow: none !important; }
+.leaflet-control-attribution { font-size: 10.5px; background: var(--label-bg) !important; color: var(--label-muted); opacity: 0.92; }
+.leaflet-control-attribution a { color: var(--label-ink); }
+.leaflet-tooltip.map-label {
+  background: var(--label-bg); color: var(--label-ink); border: 1px solid var(--label-line); border-radius: 7px;
+  box-shadow: none; padding: 4px 9px; font: 600 12.5px/1.3 var(--font-body); white-space: nowrap;
+}
+.leaflet-tooltip.map-label small { display: block; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--label-muted); font-weight: 500; }
+.leaflet-tooltip-top.map-label::before { border-top-color: var(--label-line); }
+.leaflet-tooltip-bottom.map-label::before { border-bottom-color: var(--label-line); }
+.route-edge { stroke: var(--route-edge); }
+.route-todo { stroke: var(--route-todo); }
+.route-done { stroke: var(--route-done); }
+.pin { width: 18px; height: 18px; border-radius: 50%; }
+.pin.o { border: 4px solid var(--route-done); background: var(--label-bg); }
+.pin.d { background: var(--route-done); box-shadow: inset 0 0 0 3px var(--label-bg), 0 0 0 2px var(--route-done); }
+.pin.d.ok { background: var(--ok); box-shadow: inset 0 0 0 3px var(--label-bg), 0 0 0 2px var(--ok); }
+.stop-pin { width: 14px; height: 14px; border-radius: 3px; border: 2.5px solid var(--warn); background: var(--label-bg); }
+.stop-pin.reached { background: var(--warn); }
+.truck { position: relative; width: 56px; height: 56px; display: grid; place-items: center; }
+.truck.lead::before { content: ""; position: absolute; inset: 8px; border-radius: 50%; background: var(--halo); }
+.truck .rot { position: relative; display: grid; place-items: center; width: 56px; height: 56px; }
+.truck.waiting { opacity: 0; }
+.t-shadow { fill: rgba(0, 0, 0, 0.22); } .t-body { fill: var(--truck-body); } .t-cab { fill: var(--truck-cab); }
+.t-win { fill: var(--truck-win); } .t-cold { fill: var(--truck-win); }
 
 .controls { display: flex; align-items: center; gap: 12px; padding: 12px 18px; flex-wrap: wrap; }
 .iconbtn {
@@ -290,16 +341,15 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 }
 .iconbtn:hover { border-color: var(--cornflower); }
 .iconbtn.play { background: var(--accent-strong); color: var(--on-accent); border-color: transparent; }
+.iconbtn:disabled { opacity: 0.45; cursor: not-allowed; }
 .iconbtn svg { width: 16px; height: 16px; fill: currentColor; }
 .scrub { flex: 1 1 180px; min-width: 140px; display: flex; flex-direction: column; gap: 2px; }
 .scrub input { padding: 0; border: 0; accent-color: var(--steel); height: 22px; background: transparent; }
 .scrub-meta { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 999px; padding: 2px; }
-.seg button {
-  border: 0; background: none; font-size: 12.5px; padding: 5px 12px; border-radius: 999px;
-  color: var(--muted); cursor: pointer;
-}
+.seg button { border: 0; background: none; font-size: 12.5px; padding: 5px 12px; border-radius: 999px; color: var(--muted); cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); font-weight: 600; }
+.follow { font-size: 13px; }
 
 .telemetry { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); }
 .telemetry > div { padding: 12px 18px; display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--line); min-width: 0; }
@@ -319,10 +369,7 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .box-h h2 { font-family: var(--font-display); font-weight: 500; font-size: 18px; margin: 0; letter-spacing: -0.01em; }
 .total { font-family: var(--font-display); font-weight: 700; font-size: 36px; line-height: 1.05; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .total-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
-.stats {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px;
-  background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
-}
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .stats > div { background: var(--surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .stats .v { font-family: var(--font-mono); font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .stats .k { font-size: 11.5px; color: var(--muted); }
@@ -336,41 +383,37 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .notes li { font-size: 13px; border-radius: 8px; padding: 8px 11px; background: var(--info-bg); color: var(--ink); }
 .notes li.warn { background: var(--warn-bg); }
 .notes li.warn::before { content: "Atención · "; font-weight: 600; color: var(--warn); }
+.empty { color: var(--muted); font-size: 14px; margin: 0; }
 
 .events { list-style: none; margin: 0; padding: 0; max-height: 330px; overflow-y: auto; }
 .events li { display: grid; grid-template-columns: 52px 14px minmax(0, 1fr); gap: 10px; align-items: start; position: relative; padding-bottom: 12px; }
-.events li::after {
-  content: ""; position: absolute; left: 67px; top: 14px; bottom: -2px; width: 2px; background: var(--line);
-}
+.events li::after { content: ""; position: absolute; left: 67px; top: 14px; bottom: -2px; width: 2px; background: var(--line); }
 .events li:last-child::after { display: none; }
 .events li:last-child { padding-bottom: 0; }
+.events li.placeholder { display: block; color: var(--muted); font-size: 14px; }
 .ev-time { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); padding-top: 1px; font-variant-numeric: tabular-nums; }
 .ev-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line-strong); background: var(--surface); margin-top: 4px; position: relative; z-index: 1; }
 .ev-txt { font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
 .events li.done .ev-dot { background: var(--accent-strong); border-color: var(--accent-strong); }
-.events li.done .ev-txt { color: var(--ink); }
-.events li.done .ev-time { color: var(--ink); }
+.events li.done .ev-txt, .events li.done .ev-time { color: var(--ink); }
 .events li.stop.done .ev-dot { background: var(--warn); border-color: var(--warn); }
 .events li.end.done .ev-dot { background: var(--ok); border-color: var(--ok); }
 
 .table-wrap { overflow-x: auto; margin: 0 -4px; }
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-th {
-  text-align: left; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap;
-}
+th { text-align: left; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 td { padding: 10px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
 tr:last-child td { border-bottom: 0; }
 td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 td .folio { font-family: var(--font-mono); font-weight: 500; }
 td .sub { display: block; font-size: 12px; color: var(--muted); }
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; }
-.empty { color: var(--muted); font-size: 14px; margin: 0; }
-
+.credits { font-size: 12px; color: var(--muted); max-width: 1360px; margin: 18px auto 0; }
+.credits a { color: inherit; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition: none !important; }
+  *, *::before, *::after { transition: none !important; animation-duration: 0.01ms !important; }
 }
 </style>
 </head>
@@ -398,7 +441,7 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
 <main class="layout">
   <!-- Formulario -->
   <form id="form" class="card panel" novalidate>
-    <p class="sample-note" id="sampleNote">Se cargó un flete de ejemplo. Reemplaza los datos con los tuyos y pulsa <strong>Generar flete</strong>.</p>
+    <p class="sample-note" id="sampleNote">Se cargó un flete de ejemplo con lugares reales. Reemplaza los datos con los tuyos y pulsa <strong>Generar flete</strong>.</p>
 
     <fieldset class="step">
       <legend class="step-h"><span class="step-n">01</span><h2>Vehículo</h2></legend>
@@ -428,12 +471,38 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
     <fieldset class="step">
       <legend class="step-h"><span class="step-n">03</span><h2>Ruta</h2></legend>
       <div class="grid2">
-        <div class="field wide"><label for="origen">Origen</label><input id="origen" type="text" autocomplete="off" placeholder="Finca, rancho o bodega"></div>
-        <div class="field wide"><label for="destino">Destino</label><input id="destino" type="text" autocomplete="off" placeholder="Centro de acopio, mercado o planta"></div>
-        <div class="field"><label for="distancia">Distancia</label><div class="unit"><input id="distancia" type="number" min="1" step="1" inputmode="numeric"><span>km</span></div></div>
+        <div class="field wide"><label for="pais">Buscar lugares en</label><select id="pais"></select></div>
+        <div class="field wide">
+          <label for="origen">Origen</label>
+          <div class="combo-wrap">
+            <span class="ico o" aria-hidden="true"></span>
+            <input id="origen" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="origen-list" aria-describedby="origen-hint" autocomplete="off" spellcheck="false" placeholder="Escribe una ciudad, rancho o bodega">
+            <ul class="combo-list" id="origen-list" role="listbox" aria-label="Sugerencias de origen" hidden></ul>
+          </div>
+          <span class="hint combo-hint" id="origen-hint"></span>
+        </div>
+        <div class="field wide">
+          <label for="destino">Destino</label>
+          <div class="combo-wrap">
+            <span class="ico d" aria-hidden="true"></span>
+            <input id="destino" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="destino-list" aria-describedby="destino-hint" autocomplete="off" spellcheck="false" placeholder="Centro de acopio, mercado o planta">
+            <ul class="combo-list" id="destino-list" role="listbox" aria-label="Sugerencias de destino" hidden></ul>
+          </div>
+          <span class="hint combo-hint" id="destino-hint"></span>
+        </div>
+        <div class="field wide">
+          <label for="parada">Paradas intermedias</label>
+          <ol class="chips" id="stopChips" aria-label="Paradas agregadas"></ol>
+          <div class="combo-wrap">
+            <span class="ico s" aria-hidden="true"></span>
+            <input id="parada" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="parada-list" aria-describedby="parada-hint" autocomplete="off" spellcheck="false" placeholder="Agregar parada (opcional)">
+            <ul class="combo-list" id="parada-list" role="listbox" aria-label="Sugerencias de parada" hidden></ul>
+          </div>
+          <span class="hint" id="parada-hint">Hasta 6 paradas en orden de paso: básculas, bodegas, puntos de revisión.</span>
+        </div>
         <div class="field"><label for="minParada">Min. por parada</label><div class="unit"><input id="minParada" type="number" min="0" step="5" inputmode="numeric"><span>min</span></div></div>
-        <div class="field wide"><label for="paradas">Paradas intermedias</label><input id="paradas" type="text" autocomplete="off" placeholder="Separadas por coma (opcional)"><span class="hint">Hasta 6 paradas: básculas, casetas, puntos de revisión.</span></div>
-        <div class="field wide"><label for="salida">Fecha y hora de salida</label><input id="salida" type="datetime-local"></div>
+        <div class="field"><label for="salida">Salida</label><input id="salida" type="datetime-local"></div>
+        <div class="route-info wide" id="routeInfo" data-s="idle" aria-live="polite">Elige origen y destino para trazar la ruta.</div>
       </div>
     </fieldset>
 
@@ -472,23 +541,24 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
       <div class="sim-head">
         <div>
           <div class="eyebrow" id="simEyebrow">Simulación de ruta</div>
-          <h2 class="route-title" id="routeTitle">—</h2>
+          <h2 class="route-title" id="routeTitle">Elige origen y destino</h2>
         </div>
-        <span class="pill" id="statusPill" data-s="ready">Listo para salir</span>
+        <span class="pill" id="statusPill" data-s="ready">Sin ruta</span>
       </div>
       <div class="map" id="map">
-        <canvas id="canvas" role="img" aria-label="Mapa con la ruta del flete y la posición del vehículo"></canvas>
-        <p class="convoy-note" id="convoyNote" hidden></p>
+        <div id="leaflet" role="region" aria-label="Mapa con la ruta del flete y la posición del vehículo"></div>
+        <p class="map-overlay convoy-note" id="convoyNote" hidden></p>
+        <div class="map-overlay map-msg" id="mapMsg" hidden><div><span class="spinner" id="mapSpin" hidden></span><span id="mapMsgText"></span><button type="button" class="btn-ghost" id="retryBtn" hidden>Reintentar</button></div></div>
       </div>
       <div class="controls">
-        <button type="button" class="iconbtn play" id="playBtn" aria-label="Iniciar simulación">
+        <button type="button" class="iconbtn play" id="playBtn" aria-label="Iniciar simulación" disabled>
           <svg viewBox="0 0 16 16" id="playIcon"><path d="M4 2.5v11l9-5.5z"/></svg>
         </button>
-        <button type="button" class="iconbtn" id="resetBtn" aria-label="Reiniciar simulación">
+        <button type="button" class="iconbtn" id="resetBtn" aria-label="Reiniciar simulación" disabled>
           <svg viewBox="0 0 16 16"><path d="M8 2.5a5.5 5.5 0 1 1-5.2 3.7l1.4.5A4 4 0 1 0 8 4v2L4.8 3.2 8 .5z"/></svg>
         </button>
         <div class="scrub">
-          <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Avance de la simulación">
+          <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Avance de la simulación" disabled>
           <div class="scrub-meta"><span id="scrubPct">0 %</span><span id="scrubDur">—</span></div>
         </div>
         <div class="seg" role="group" aria-label="Velocidad de la simulación">
@@ -496,6 +566,7 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
           <button type="button" data-mode="normal" aria-pressed="true">Normal</button>
           <button type="button" data-mode="rapida" aria-pressed="false">Rápida</button>
         </div>
+        <label class="check follow"><input type="checkbox" id="follow"><span>Seguir unidad</span></label>
       </div>
       <div class="telemetry">
         <div><span class="lbl">Hora simulada</span><span class="t-val" id="tClock">—</span><span class="t-sub" id="tDay">—</span></div>
@@ -513,7 +584,7 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
         </div>
         <div>
           <div class="total" id="qTotal">—</div>
-          <div class="total-sub" id="qTotalSub">—</div>
+          <div class="total-sub" id="qTotalSub">Traza la ruta para calcular la cotización.</div>
         </div>
         <div class="stats">
           <div><span class="v" id="sViajes">—</span><span class="k">viajes</span></div>
@@ -526,7 +597,7 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
 
       <section class="card box" aria-labelledby="logH">
         <div class="box-h"><h2 id="logH">Bitácora del viaje</h2><span class="hint" id="logHint">Horario programado</span></div>
-        <ol class="events" id="events"></ol>
+        <ol class="events" id="events"><li class="placeholder">El itinerario aparece cuando la ruta está trazada.</li></ol>
       </section>
     </div>
 
@@ -537,6 +608,9 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
   </div>
 </main>
 
+<p class="credits">Mapa © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">colaboradores de OpenStreetMap</a> y <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> · Rutas por <a href="https://project-osrm.org/" target="_blank" rel="noopener">OSRM</a> · Búsqueda de lugares por <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>. Requiere conexión a internet.</p>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (() => {
   'use strict';
@@ -565,13 +639,36 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
     { id: 'fertilizante', name: 'Fertilizante' },
     { id: 'forraje', name: 'Forraje en pacas' }
   ];
+  // País → centro aproximado, usado para priorizar sugerencias cercanas
+  const COUNTRIES = [
+    ['', 'Cualquier país', null],
+    ['MX', 'México', [23.6, -102.5]], ['GT', 'Guatemala', [15.7, -90.2]], ['HN', 'Honduras', [14.8, -86.6]],
+    ['SV', 'El Salvador', [13.8, -88.9]], ['NI', 'Nicaragua', [12.9, -85.2]], ['CR', 'Costa Rica', [9.9, -84.1]],
+    ['PA', 'Panamá', [8.5, -80.1]], ['DO', 'República Dominicana', [18.8, -70.2]], ['CO', 'Colombia', [4.6, -74.1]],
+    ['VE', 'Venezuela', [7.1, -66.2]], ['EC', 'Ecuador', [-1.5, -78.4]], ['PE', 'Perú', [-9.2, -75.0]],
+    ['BO', 'Bolivia', [-16.3, -63.6]], ['CL', 'Chile', [-33.4, -70.7]], ['AR', 'Argentina', [-34.6, -63.6]],
+    ['UY', 'Uruguay', [-32.8, -56.0]], ['PY', 'Paraguay', [-23.4, -58.4]], ['BR', 'Brasil', [-14.2, -51.9]],
+    ['US', 'Estados Unidos', [37.1, -95.7]], ['ES', 'España', [40.4, -3.7]]
+  ];
+  const KIND = {
+    city: 'Ciudad', town: 'Población', village: 'Localidad', hamlet: 'Caserío', locality: 'Paraje',
+    suburb: 'Colonia', neighbourhood: 'Barrio', farm: 'Granja', farmyard: 'Granja', farmland: 'Terreno agrícola',
+    orchard: 'Huerta', warehouse: 'Bodega', industrial: 'Zona industrial', marketplace: 'Mercado',
+    state: 'Estado', county: 'Municipio', administrative: 'Región', fuel: 'Gasolinera', port: 'Puerto',
+    airport: 'Aeropuerto', silo: 'Silo', street: 'Calle', residential: 'Calle', primary: 'Carretera',
+    secondary: 'Carretera', trunk: 'Carretera', motorway: 'Autopista'
+  };
   const LOCALE = { MXN: 'es-MX', USD: 'es-US', COP: 'es-CO', PEN: 'es-PE', CLP: 'es-CL', ARS: 'es-AR', GTQ: 'es-GT', EUR: 'es-ES' };
   const REAL_SECONDS = { lenta: 45, normal: 24, rapida: 10 };   // duración de la animación completa
   const CONVOY_GAP_H = 1 / 6;                                   // 10 min entre unidades del convoy
   const MAX_CONVOY = 6;
   const MAX_STOPS = 6;
-  const STORE_KEY = 'fleteagro.historial.v1';
-  const W = 1000, H = 560;                                      // mundo lógico del mapa
+  const STORE_KEY = 'fleteagro.historial.v2';
+  const GEOCODER = 'https://photon.komoot.io/api/';
+  const ROUTERS = [
+    'https://router.project-osrm.org/route/v1/driving/',
+    'https://routing.openstreetmap.de/routed-car/route/v1/driving/'
+  ];
 
   const $ = (s) => document.querySelector(s);
   const form = $('#form');
@@ -580,30 +677,15 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  function hashStr(s) {
-    let h = 2166136261;
-    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
-    return h >>> 0;
-  }
-  function mulberry32(a) {
-    return function () {
-      a |= 0; a = (a + 0x6D2B79F5) | 0;
-      let t = Math.imul(a ^ (a >>> 15), 1 | a);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  }
-  function fmtNum(v, d = 0) {
-    return new Intl.NumberFormat('es-MX', { minimumFractionDigits: d, maximumFractionDigits: d }).format(v);
-  }
+  function fmtNum(v, d = 0) { return new Intl.NumberFormat('es-MX', { minimumFractionDigits: d, maximumFractionDigits: d }).format(v); }
   function fmtMoney(v, cur) {
     try {
-      return new Intl.NumberFormat(LOCALE[cur] || 'es', { style: 'currency', currency: cur, maximumFractionDigits: cur === 'CLP' ? 0 : 2, minimumFractionDigits: cur === 'CLP' ? 0 : 2 }).format(v);
+      const d = cur === 'CLP' ? 0 : 2;
+      return new Intl.NumberFormat(LOCALE[cur] || 'es', { style: 'currency', currency: cur, minimumFractionDigits: d, maximumFractionDigits: d }).format(v);
     } catch (e) { return cur + ' ' + v.toFixed(2); }
   }
   function fmtDur(h) {
-    const m = Math.round(h * 60);
-    const hh = Math.floor(m / 60), mm = m % 60;
+    const m = Math.round(h * 60), hh = Math.floor(m / 60), mm = m % 60;
     return hh ? `${hh} h ${String(mm).padStart(2, '0')} min` : `${mm} min`;
   }
   const fmtTime = (d) => d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -613,17 +695,16 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
     const p = (n) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
   }
-  function parseSalida(s) {
-    const d = s ? new Date(s) : null;
-    return d && !isNaN(d) ? d : new Date();
+  function parseSalida(s) { const d = s ? new Date(s) : null; return d && !isNaN(d) ? d : new Date(); }
+  const truncate = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+  const fmtT = (v) => fmtNum(v, v % 1 ? 1 : 0);
+  function haversine(a, b) {
+    const R = 6371, toR = Math.PI / 180;
+    const dLat = (b[0] - a[0]) * toR, dLon = (b[1] - a[1]) * toR;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * toR) * Math.cos(b[0] * toR) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
   }
-  function hexAlpha(hex, a) {
-    const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-    if (!m) return hex;
-    const n = parseInt(m[1], 16);
-    return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
-  }
-  function truncate(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+  const placeText = (p) => (p.ctx ? `${p.name}, ${p.ctx}` : p.name);
 
   /* ---------- Construcción del formulario ---------- */
   function vehIcon(v) {
@@ -642,10 +723,11 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
       <input type="radio" name="veh" value="${v.id}" id="veh-${v.id}">
       <span class="veh-box">${vehIcon(v)}
         <span class="veh-name">${v.name}</span>
-        <span class="veh-cap">hasta ${fmtNum(v.cap, v.cap % 1 ? 1 : 0)} t${v.refr ? ' · frío' : ''}</span>
+        <span class="veh-cap">hasta ${fmtT(v.cap)} t${v.refr ? ' · frío' : ''}</span>
       </span>
     </label>`).join('');
   $('#producto').innerHTML = PRODUCTS.map((p) => `<option value="${p.id}">${p.name}${p.per ? ' (perecedero)' : ''}</option>`).join('');
+  $('#pais').innerHTML = COUNTRIES.map(([c, n]) => `<option value="${c}">${n}</option>`).join('');
 
   function applyPreset(id) {
     const v = VEHICLES.find((x) => x.id === id);
@@ -653,24 +735,186 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
     $('#cap').value = v.cap; $('#vel').value = v.vel; $('#tarifa').value = v.tarifa; $('#rend').value = v.rend;
   }
 
+  /* ---------- Lugares (origen, destino, paradas) ---------- */
+  const places = { origen: null, destino: null };
+  let stops = [];
+
+  function isConfirmed(key) {
+    const p = places[key];
+    return !!p && document.getElementById(key).value.trim() === placeText(p);
+  }
+  function setHint(key) {
+    const el = document.getElementById(key + '-hint');
+    const p = places[key];
+    const value = document.getElementById(key).value.trim();
+    if (isConfirmed(key)) {
+      el.className = 'hint combo-hint ok';
+      el.innerHTML = `Ubicado en el mapa <span class="coords">${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</span>`;
+    } else {
+      el.className = 'hint combo-hint';
+      el.textContent = value ? 'Elige una de las sugerencias para fijar el punto en el mapa.' : '';
+    }
+  }
+
+  function renderStops() {
+    $('#stopChips').innerHTML = stops.map((s, i) => `
+      <li class="chip"><span class="n">P${i + 1}</span><span class="t" title="${esc(placeText(s))}">${esc(s.name)}${s.ctx ? ` <small>· ${esc(s.ctx)}</small>` : ''}</span>
+      <button type="button" data-rm="${i}" aria-label="Quitar parada ${esc(s.name)}">×</button></li>`).join('');
+    const full = stops.length >= MAX_STOPS;
+    $('#parada').disabled = full;
+    $('#parada').placeholder = full ? 'Máximo de 6 paradas' : 'Agregar parada (opcional)';
+  }
+  $('#stopChips').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-rm]');
+    if (!b) return;
+    stops.splice(+b.dataset.rm, 1);
+    renderStops();
+    requestRoute();
+  });
+
+  function toPlace(f) {
+    const pr = f.properties || {};
+    const [lon, lat] = f.geometry.coordinates;
+    const name = pr.name || [pr.street, pr.housenumber].filter(Boolean).join(' ') || pr.city || pr.county || pr.state || pr.country || 'Lugar sin nombre';
+    const parts = [];
+    const loc = [pr.city, pr.district, pr.county].find((v) => v && v !== name);
+    [loc, pr.state, pr.country].forEach((v) => { if (v && v !== name && !parts.includes(v)) parts.push(v); });
+    return { name, ctx: parts.join(', '), kind: KIND[pr.osm_value] || '', lat, lon, cc: (pr.countrycode || '').toUpperCase() };
+  }
+
+  async function searchPlaces(q, signal) {
+    const cc = $('#pais').value;
+    const params = new URLSearchParams({ q, limit: cc ? '25' : '8' });
+    const bias = places.origen;
+    const cent = (COUNTRIES.find((c) => c[0] === cc) || [])[2];
+    if (bias && (!cc || bias.cc === cc)) { params.set('lat', bias.lat.toFixed(4)); params.set('lon', bias.lon.toFixed(4)); }
+    else if (cent) { params.set('lat', cent[0]); params.set('lon', cent[1]); }
+    const res = await fetch(GEOCODER + '?' + params, { signal });
+    if (!res.ok) throw new Error('http ' + res.status);
+    const data = await res.json();
+    const out = [], seen = new Set();
+    for (const f of data.features || []) {
+      if (!f.geometry || !f.geometry.coordinates) continue;
+      const it = toPlace(f);
+      if (cc && it.cc !== cc) continue;
+      const key = it.name + '|' + it.ctx;
+      if (seen.has(key)) continue;
+      seen.add(key); out.push(it);
+      if (out.length >= 7) break;
+    }
+    return out;
+  }
+
+  function makeCombo(input, onPick, opts = {}) {
+    const list = document.getElementById(input.getAttribute('aria-controls'));
+    let items = [], active = -1, ctrl = null, timer = 0;
+    const close = () => {
+      list.hidden = true; input.setAttribute('aria-expanded', 'false'); active = -1; input.removeAttribute('aria-activedescendant');
+    };
+    const open = () => { list.hidden = false; input.setAttribute('aria-expanded', 'true'); };
+    const msg = (t) => { list.innerHTML = `<li class="combo-msg" role="presentation">${esc(t)}</li>`; open(); };
+    function render() {
+      if (!items.length) return msg('Sin resultados. Prueba con otro nombre o agrega el estado o el país.');
+      list.innerHTML = items.map((it, i) => `
+        <li role="option" id="${list.id}-${i}" data-i="${i}" class="combo-opt" aria-selected="${i === active}">
+          <span class="o-name">${esc(it.name)}${it.kind ? `<span class="o-kind">${esc(it.kind)}</span>` : ''}</span>
+          ${it.ctx ? `<span class="o-ctx">${esc(it.ctx)}</span>` : ''}
+        </li>`).join('');
+      if (active >= 0) {
+        input.setAttribute('aria-activedescendant', `${list.id}-${active}`);
+        const el = document.getElementById(`${list.id}-${active}`);
+        if (el) el.scrollIntoView({ block: 'nearest' });
+      }
+      open();
+    }
+    function pick(it) {
+      close();
+      input.value = opts.clearOnPick ? '' : placeText(it);
+      onPick(it);
+    }
+    input.addEventListener('input', () => {
+      if (opts.onEdit) opts.onEdit();
+      const q = input.value.trim();
+      clearTimeout(timer);
+      if (ctrl) ctrl.abort();
+      if (q.length < 3) { close(); return; }
+      timer = setTimeout(async () => {
+        ctrl = new AbortController();
+        msg('Buscando lugares…');
+        try {
+          items = await searchPlaces(q, ctrl.signal);
+          active = items.length ? 0 : -1;
+          render();
+        } catch (e) {
+          if (e.name === 'AbortError') return;
+          items = [];
+          msg('No se pudieron cargar sugerencias. Revisa tu conexión a internet.');
+        }
+      }, 320);
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') e.preventDefault();       // Enter nunca envía el formulario desde estos campos
+      if (list.hidden || !items.length) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); active = (active + 1) % items.length; render(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); active = (active - 1 + items.length) % items.length; render(); }
+      else if (e.key === 'Enter' && active >= 0) pick(items[active]);
+      else if (e.key === 'Escape') close();
+    });
+    list.addEventListener('mousedown', (e) => {
+      const li = e.target.closest('.combo-opt');
+      if (!li) return;
+      e.preventDefault();
+      pick(items[+li.dataset.i]);
+    });
+    input.addEventListener('blur', () => setTimeout(close, 150));
+  }
+
+  ['origen', 'destino'].forEach((key) => {
+    makeCombo(document.getElementById(key), (it) => {
+      places[key] = it;
+      setHint(key);
+      hideSample();
+      requestRoute();
+    }, { onEdit: () => setHint(key) });
+  });
+  makeCombo($('#parada'), (it) => {
+    if (stops.length >= MAX_STOPS) return;
+    stops.push(it);
+    renderStops();
+    hideSample();
+    requestRoute();
+  }, { clearOnPick: true });
+
+  /* ---------- Ejemplo inicial (lugares reales) ---------- */
   const SAMPLE = (() => {
     const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(6, 0, 0, 0);
     return {
       vid: 'trailer', cap: 30, vel: 62, tarifa: 27, rend: 2.7,
       producto: 'maiz', cantidad: 72, presentacion: 'Granel',
-      origen: 'Finca El Mirador', destino: 'Centro de acopio Valle Alto', distancia: 186,
-      paradas: 'Báscula pública, Caseta El Llano', minParada: 20, salida: toLocalInput(d),
+      origen: { name: 'Celaya', ctx: 'Guanajuato, México', lat: 20.5235, lon: -100.8157, cc: 'MX' },
+      destino: { name: 'Guadalajara', ctx: 'Jalisco, México', lat: 20.6767, lon: -103.3475, cc: 'MX' },
+      paradas: [
+        { name: 'Irapuato', ctx: 'Guanajuato, México', lat: 20.6767, lon: -101.3563, cc: 'MX' },
+        { name: 'La Piedad de Cabadas', ctx: 'Michoacán, México', lat: 20.3417, lon: -102.0280, cc: 'MX' }
+      ],
+      pais: 'MX', minParada: 20, salida: toLocalInput(d),
       moneda: 'MXN', combustible: 25.5, maniobras: 1200, peajes: 640, iva: 16, retorno: false
     };
   })();
+  function hideSample() { $('#sampleNote').hidden = true; }
 
   function fillForm(p) {
     const r = document.getElementById('veh-' + p.vid);
     if (r) r.checked = true;
-    ['cap', 'vel', 'tarifa', 'rend', 'producto', 'cantidad', 'presentacion', 'origen', 'destino', 'distancia', 'minParada', 'salida', 'moneda', 'combustible', 'maniobras', 'peajes', 'iva']
+    ['cap', 'vel', 'tarifa', 'rend', 'producto', 'cantidad', 'presentacion', 'pais', 'minParada', 'salida', 'moneda', 'combustible', 'maniobras', 'peajes', 'iva']
       .forEach((k) => { const el = document.getElementById(k); if (el && p[k] !== undefined) el.value = p[k]; });
-    $('#paradas').value = Array.isArray(p.paradas) ? p.paradas.join(', ') : (p.paradas || '');
     $('#retorno').checked = !!p.retorno;
+    places.origen = p.origen ? { ...p.origen } : null;
+    places.destino = p.destino ? { ...p.destino } : null;
+    $('#origen').value = places.origen ? placeText(places.origen) : '';
+    $('#destino').value = places.destino ? placeText(places.destino) : '';
+    stops = (p.paradas || []).map((s) => ({ ...s }));
+    renderStops(); setHint('origen'); setHint('destino');
   }
 
   function readParams() {
@@ -680,23 +924,25 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
       vid: checked ? checked.value : 'trailer',
       cap: n('cap'), vel: n('vel'), tarifa: n('tarifa'), rend: n('rend'),
       producto: $('#producto').value, cantidad: n('cantidad'), presentacion: $('#presentacion').value,
-      origen: $('#origen').value.trim(), destino: $('#destino').value.trim(), distancia: n('distancia'),
-      paradas: $('#paradas').value.split(',').map((s) => s.trim()).filter(Boolean).slice(0, MAX_STOPS),
+      origen: places.origen, destino: places.destino, paradas: stops.slice(), pais: $('#pais').value,
       minParada: n('minParada'), salida: $('#salida').value,
       moneda: $('#moneda').value, combustible: n('combustible'), maniobras: n('maniobras'), peajes: n('peajes'),
       iva: n('iva'), retorno: $('#retorno').checked
     };
   }
-
-  function validate(p) {
+  function validateParams(p) {
     const e = [];
-    if (!p.origen) e.push('Escribe el punto de origen.');
-    if (!p.destino) e.push('Escribe el destino.');
-    if (p.origen && p.destino && p.origen.toLowerCase() === p.destino.toLowerCase()) e.push('El origen y el destino deben ser distintos.');
-    if (p.distancia <= 0) e.push('Indica la distancia en km (mayor que 0).');
     if (p.cantidad <= 0) e.push('Indica la cantidad de carga en toneladas.');
     if (p.cap <= 0) e.push('La capacidad del vehículo debe ser mayor que 0.');
     if (p.vel <= 0) e.push('La velocidad promedio debe ser mayor que 0.');
+    return e;
+  }
+  function validateRoute() {
+    const e = [];
+    if (!isConfirmed('origen')) e.push('Elige el origen de la lista de sugerencias.');
+    if (!isConfirmed('destino')) e.push('Elige el destino de la lista de sugerencias.');
+    if (!e.length && routeState === 'loading') e.push('Espera a que termine de trazarse la ruta.');
+    else if (!e.length && !R) e.push('No hay una ruta trazada. Revisa los lugares o pulsa Reintentar en el mapa.');
     return e;
   }
 
@@ -722,67 +968,273 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
     };
   }
 
-  /* ---------- Ruta y línea de tiempo ---------- */
-  let route = null;
-  function buildRoute(key) {
-    const seed = hashStr(key);
-    const r = mulberry32(seed);
-    const o = { x: 95, y: 120 + r() * 320 }, d = { x: 905, y: 120 + r() * 320 };
-    const ctrl = [o];
-    const n = 4 + Math.floor(r() * 3);
-    for (let i = 1; i <= n; i++) {
-      const t = i / (n + 1);
-      ctrl.push({ x: lerp(o.x, d.x, t) + (r() - 0.5) * 60, y: clamp(lerp(o.y, d.y, t) + (r() - 0.5) * 250, 70, 490) });
+  /* ---------- Ruta real ---------- */
+  let R = null;               // ruta trazada vigente
+  let routeState = 'idle';    // idle | loading | ok | error
+  let routeSeq = 0;
+
+  async function fetchRoute(pts) {
+    const coords = pts.map((p) => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
+    const qs = '?overview=full&geometries=geojson&steps=false&alternatives=false';
+    let noRoute = false;
+    for (const base of ROUTERS) {
+      try {
+        const res = await fetch(base + coords + qs);
+        const data = await res.json().catch(() => null);
+        if (data && data.code === 'Ok' && data.routes && data.routes.length) return data.routes[0];
+        if (data && (data.code === 'NoRoute' || data.code === 'NoSegment')) noRoute = true;
+      } catch (e) { /* probar el siguiente servicio */ }
     }
-    ctrl.push(d);
-    const pts = [];
-    for (let i = 0; i < ctrl.length - 1; i++) {
-      const p0 = ctrl[Math.max(i - 1, 0)], p1 = ctrl[i], p2 = ctrl[i + 1], p3 = ctrl[Math.min(i + 2, ctrl.length - 1)];
-      for (let s = 0; s < 24; s++) {
-        const t = s / 24, t2 = t * t, t3 = t2 * t;
-        const f = (a, b, c, e) => 0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - e) * t2 + (-a + 3 * b - 3 * c + e) * t3);
-        pts.push({ x: f(p0.x, p1.x, p2.x, p3.x), y: f(p0.y, p1.y, p2.y, p3.y) });
-      }
-    }
-    pts.push(d);
-    const cum = [0];
-    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
-    route = { seed, pts, cum, len: cum[cum.length - 1], scr: [] };
-    projectRoute();
-  }
-  function pointAt(f) {
-    const target = clamp(f, 0, 1) * route.len;
-    let lo = 0, hi = route.cum.length - 1;
-    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (route.cum[mid] <= target) lo = mid; else hi = mid; }
-    const a = route.pts[lo], b = route.pts[hi];
-    const seg = route.cum[hi] - route.cum[lo] || 1;
-    const t = (target - route.cum[lo]) / seg;
-    return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), ang: Math.atan2(b.y - a.y, b.x - a.x), idx: lo };
+    throw new Error(noRoute ? 'noroute' : 'network');
   }
 
+  function prepareRoute(r, key, pts) {
+    let coords = r.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+    if (coords.length > 4000) {           // aligerar geometrías muy largas para animar con fluidez
+      const k = Math.ceil(coords.length / 4000);
+      coords = coords.filter((_, i) => i % k === 0 || i === coords.length - 1);
+    }
+    const cum = [0];
+    for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + haversine(coords[i - 1], coords[i]));
+    const len = cum[cum.length - 1] || 1;
+    const legs = (r.legs || []).map((l) => l.distance);
+    const totalLegs = legs.reduce((a, b) => a + b, 0) || 1;
+    const stopFr = [];
+    let acc = 0;
+    for (let i = 0; i < pts.length - 2; i++) { acc += legs[i] || 0; stopFr.push(clamp(acc / totalLegs, 0, 1)); }
+    return {
+      key, coords, cum, len, stopFr,
+      distance: r.distance / 1000,
+      origen: pts[0], destino: pts[pts.length - 1], paradas: pts.slice(1, -1)
+    };
+  }
+
+  function pointAt(f) {
+    const target = clamp(f, 0, 1) * R.len;
+    let lo = 0, hi = R.cum.length - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (R.cum[mid] <= target) lo = mid; else hi = mid; }
+    const a = R.coords[lo], b = R.coords[hi];
+    const seg = R.cum[hi] - R.cum[lo] || 1;
+    const t = clamp((target - R.cum[lo]) / seg, 0, 1);
+    return { ll: [lerp(a[0], b[0], t), lerp(a[1], b[1], t)], idx: lo };
+  }
+
+  function setRouteInfo(state, html) {
+    const el = $('#routeInfo');
+    el.dataset.s = state;
+    el.innerHTML = html;
+  }
+
+  async function requestRoute(opts = {}) {
+    if (!isConfirmed('origen') || !isConfirmed('destino')) {
+      routeSeq++;
+      R = null; routeState = 'idle';
+      clearRouteLayers();
+      previewPlaces();
+      setRouteInfo('idle', 'Elige origen y destino de las sugerencias para trazar la ruta.');
+      showMapMsg('Escribe y elige el origen y el destino para trazar la ruta por carretera.');
+      refresh();
+      return;
+    }
+    const pts = [places.origen, ...stops, places.destino];
+    const key = pts.map((p) => p.lat.toFixed(5) + ',' + p.lon.toFixed(5)).join(';');
+    if (R && R.key === key) { refresh(); if (opts.autoplay) play(); return; }
+    const seq = ++routeSeq;
+    routeState = 'loading';
+    pause();
+    setRouteInfo('loading', 'Trazando ruta por carretera…');
+    showMapMsg('Trazando ruta por carretera…', { loading: true });
+    refresh();
+    try {
+      const r = await fetchRoute(pts);
+      if (seq !== routeSeq) return;
+      R = prepareRoute(r, key, pts);
+      routeState = 'ok';
+      hideMapMsg();
+      drawRouteLayers();
+      setRouteInfo('ok', `<span>Distancia por carretera</span><strong>${fmtNum(R.distance, R.distance < 100 ? 1 : 0)} km</strong>`);
+      refresh();
+      if (opts.autoplay) play();
+    } catch (e) {
+      if (seq !== routeSeq) return;
+      R = null; routeState = 'error';
+      clearRouteLayers();
+      previewPlaces();
+      refresh();
+      const text = e.message === 'noroute'
+        ? 'No hay una ruta por carretera entre estos puntos. Prueba con otro lugar.'
+        : 'No se pudo conectar con el servicio de rutas. Revisa tu conexión e inténtalo de nuevo.';
+      setRouteInfo('error', text);
+      showMapMsg(text, { retry: true });
+    }
+  }
+
+  /* ---------- Mapa (Leaflet) ---------- */
+  let map = null, tiles = null, routeGroup = null, previewGroup = null, doneLine = null, destMarker = null;
+  let stopMarkers = [], truckMarkers = [];
+  const hasLeaflet = typeof window.L !== 'undefined';
+
+  function tileUrl() {
+    const t = getComputedStyle(document.documentElement).getPropertyValue('--tiles').trim();
+    return `https://{s}.basemaps.cartocdn.com/${t === 'dark' ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`;
+  }
+  function initMap() {
+    if (!hasLeaflet) return;
+    map = L.map('leaflet', { zoomControl: true, worldCopyJump: true }).setView([20.6, -101.8], 7);
+    tiles = L.tileLayer(tileUrl(), {
+      subdomains: 'abcd', maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a> · OSRM'
+    }).addTo(map);
+    map.attributionControl.setPrefix(false);
+    previewGroup = L.layerGroup().addTo(map);
+    map.on('zoomend', () => { dirty = true; });
+    new ResizeObserver(() => map.invalidateSize()).observe($('#map'));
+  }
+  function showMapMsg(text, o = {}) {
+    $('#mapMsgText').textContent = text;
+    $('#mapSpin').hidden = !o.loading;
+    $('#retryBtn').hidden = !o.retry;
+    $('#mapMsg').hidden = false;
+  }
+  function hideMapMsg() { $('#mapMsg').hidden = true; }
+  $('#retryBtn').addEventListener('click', () => { R = null; requestRoute(); });
+
+  const pinIcon = (cls) => L.divIcon({ className: '', html: `<div class="pin ${cls}"></div>`, iconSize: [18, 18], iconAnchor: [9, 9] });
+  const labelHtml = (sub, name) => `<small>${esc(sub)}</small>${esc(truncate(name, 34))}`;
+  const tip = (dir) => ({ permanent: true, direction: dir, offset: [0, dir === 'top' ? -10 : 10], className: 'map-label' });
+
+  function previewPlaces() {
+    if (!map) return;
+    previewGroup.clearLayers();
+    const pts = [];
+    if (isConfirmed('origen')) {
+      L.marker([places.origen.lat, places.origen.lon], { icon: pinIcon('o'), keyboard: false })
+        .bindTooltip(labelHtml('Origen', places.origen.name), tip('top')).addTo(previewGroup);
+      pts.push([places.origen.lat, places.origen.lon]);
+    }
+    if (isConfirmed('destino')) {
+      L.marker([places.destino.lat, places.destino.lon], { icon: pinIcon('d'), keyboard: false })
+        .bindTooltip(labelHtml('Destino', places.destino.name), tip('top')).addTo(previewGroup);
+      pts.push([places.destino.lat, places.destino.lon]);
+    }
+    if (pts.length === 1) map.setView(pts[0], 9);
+    else if (pts.length === 2) map.fitBounds(pts, { padding: [60, 60] });
+  }
+
+  function clearRouteLayers() {
+    if (!map) return;
+    if (routeGroup) { map.removeLayer(routeGroup); routeGroup = null; }
+    truckMarkers = []; stopMarkers = []; doneLine = null; destMarker = null;
+    $('#convoyNote').hidden = true;
+  }
+
+  function drawRouteLayers() {
+    if (!map) return;
+    previewGroup.clearLayers();
+    clearRouteLayers();
+    routeGroup = L.layerGroup().addTo(map);
+    const ll = R.coords;
+    const line = { opacity: 1, lineCap: 'round', lineJoin: 'round', interactive: false };
+    L.polyline(ll, { ...line, className: 'route-edge', weight: 11 }).addTo(routeGroup);
+    L.polyline(ll, { ...line, className: 'route-todo', weight: 5, opacity: 0.85 }).addTo(routeGroup);
+    doneLine = L.polyline([], { ...line, className: 'route-done', weight: 6 }).addTo(routeGroup);
+    R.paradas.forEach((s, i) => {
+      const m = L.marker(pointAt(R.stopFr[i]).ll, {
+        icon: L.divIcon({ className: '', html: '<div class="stop-pin"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }), keyboard: false
+      }).bindTooltip(labelHtml(`Parada ${i + 1}`, s.name), tip(i % 2 ? 'top' : 'bottom')).addTo(routeGroup);
+      stopMarkers.push(m);
+    });
+    L.marker(ll[0], { icon: pinIcon('o'), keyboard: false }).bindTooltip(labelHtml('Origen', R.origen.name), tip('top')).addTo(routeGroup);
+    destMarker = L.marker(ll[ll.length - 1], { icon: pinIcon('d'), keyboard: false }).bindTooltip(labelHtml('Destino', R.destino.name), tip('top')).addTo(routeGroup);
+    map.fitBounds(L.latLngBounds(ll), { padding: [50, 50] });
+  }
+
+  function truckSvg(v) {
+    const len = Math.round(20 * v.len + 8), trailer = Math.round(len * 0.72);
+    return `<svg width="${len + 2}" height="13" viewBox="0 0 ${len + 2} 13" aria-hidden="true">
+      <rect class="t-shadow" x="2" y="3" width="${len}" height="9.5" rx="2.5"/>
+      <rect class="t-body" x="0" y="1.5" width="${trailer}" height="9.5" rx="2"/>
+      ${v.refr ? `<rect class="t-cold" x="2" y="5.5" width="${trailer - 4}" height="1.6" rx=".8"/>` : ''}
+      <rect class="t-cab" x="${trailer + 1.2}" y="2.1" width="${len - trailer - 1.2}" height="8.3" rx="2.5"/>
+      <rect class="t-win" x="${len - 3.2}" y="3.4" width="1.7" height="5.7" rx=".6"/>
+    </svg>`;
+  }
+  function buildTrucks() {
+    truckMarkers.forEach((m) => m.remove());
+    truckMarkers = [];
+    if (!map || !R || !routeGroup) return;
+    const v = VEHICLES.find((x) => x.id === P.vid) || VEHICLES[4];
+    for (let i = 0; i < sim.n; i++) {
+      const icon = L.divIcon({
+        className: '', iconSize: [56, 56], iconAnchor: [28, 28],
+        html: `<div class="truck${i === 0 ? ' lead' : ' waiting'}"><div class="rot">${truckSvg(v)}</div></div>`
+      });
+      const m = L.marker(R.coords[0], { icon, keyboard: false, interactive: false, zIndexOffset: 1000 - i }).addTo(routeGroup);
+      m._ang = 0;
+      truckMarkers.push(m);
+    }
+  }
+
+  function headingAt(idx, prev) {
+    const a = R.coords[idx], b = R.coords[Math.min(idx + 1, R.coords.length - 1)];
+    const pa = map.latLngToLayerPoint(a), pb = map.latLngToLayerPoint(b);
+    const dx = pb.x - pa.x, dy = pb.y - pa.y;
+    if (Math.abs(dx) + Math.abs(dy) < 0.01) return prev;
+    return Math.atan2(dy, dx) * 180 / Math.PI;
+  }
+
+  let lastDoneF = -1;
+  function draw() {
+    if (!map || !R || !TL || !doneLine) return;
+    const lead = stateAt(TL, sim.t);
+    if (Math.abs(lead.f - lastDoneF) > 1e-5) {
+      lastDoneF = lead.f;
+      if (lead.f <= 0) doneLine.setLatLngs([]);
+      else { const p = pointAt(lead.f); doneLine.setLatLngs(R.coords.slice(0, p.idx + 1).concat([p.ll])); }
+    }
+    stopMarkers.forEach((m, i) => {
+      const el = m.getElement();
+      if (el) el.firstElementChild.classList.toggle('reached', sim.t > 0 && lead.f >= R.stopFr[i] - 1e-6);
+    });
+    if (destMarker && destMarker.getElement()) destMarker.getElement().firstElementChild.classList.toggle('ok', lead.s === 'done');
+    truckMarkers.forEach((m, i) => {
+      const ti = sim.t - i * CONVOY_GAP_H;
+      const p = pointAt(stateAt(TL, ti).f);
+      m.setLatLng(p.ll);
+      m._ang = headingAt(p.idx, m._ang);
+      const el = m.getElement();
+      if (el) {
+        const box = el.firstElementChild;
+        box.classList.toggle('waiting', i > 0 && ti <= 0);
+        box.firstElementChild.style.transform = `rotate(${m._ang}deg)`;
+      }
+    });
+    if ($('#follow').checked && sim.playing) map.panTo(pointAt(lead.f).ll, { animate: false });
+  }
+
+  /* ---------- Línea de tiempo ---------- */
   function buildTimeline(p) {
     const segs = [], events = [];
-    const k = p.paradas.length;
-    const stopFr = p.paradas.map((_, i) => (i + 1) / (k + 1));
+    const names = R.paradas.map((s) => s.name);
+    const stopFr = R.stopFr;
     const stopH = p.minParada / 60;
     let t = 0, prev = 0;
-    events.push({ t: 0, txt: `Salida de ${p.origen}`, kind: 'start' });
+    events.push({ t: 0, txt: `Salida de ${R.origen.name}`, kind: 'start' });
     stopFr.forEach((f, i) => {
       const dur = (f - prev) * p.distancia / p.vel;
       segs.push({ type: 'drive', t0: t, t1: t + dur, f0: prev, f1: f });
       t += dur;
-      events.push({ t, txt: `Llega a ${p.paradas[i]} · km ${fmtNum(f * p.distancia)}`, kind: 'stop' });
+      events.push({ t, txt: `Llega a ${names[i]} · km ${fmtNum(f * p.distancia)}`, kind: 'stop' });
       if (stopH > 0) {
-        segs.push({ type: 'stop', t0: t, t1: t + stopH, f0: f, f1: f, name: p.paradas[i] });
+        segs.push({ type: 'stop', t0: t, t1: t + stopH, f0: f, f1: f, name: names[i] });
         t += stopH;
-        events.push({ t, txt: `Reanuda tras ${fmtNum(p.minParada)} min en ${p.paradas[i]}`, kind: 'resume' });
+        events.push({ t, txt: `Reanuda tras ${fmtNum(p.minParada)} min en ${names[i]}`, kind: 'resume' });
       }
       prev = f;
     });
     const dur = (1 - prev) * p.distancia / p.vel;
     segs.push({ type: 'drive', t0: t, t1: t + dur, f0: prev, f1: 1 });
     t += dur;
-    // Hitos de avance que no coincidan con paradas
     [0.25, 0.5, 0.75].forEach((q) => {
       if (stopFr.some((f) => Math.abs(f - q) < 0.06)) return;
       const s = segs.find((g) => g.type === 'drive' && q >= g.f0 && q <= g.f1);
@@ -790,7 +1242,7 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
       const tq = lerp(s.t0, s.t1, (q - s.f0) / ((s.f1 - s.f0) || 1));
       events.push({ t: tq, txt: `${fmtNum(q * 100)} % del recorrido · km ${fmtNum(q * p.distancia)}`, kind: 'mark' });
     });
-    events.push({ t, txt: `Entrega en ${p.destino}`, kind: 'end' });
+    events.push({ t, txt: `Entrega en ${R.destino.name}`, kind: 'end' });
     events.sort((a, b) => a.t - b.t);
     return { segs, events, total: t };
   }
@@ -806,256 +1258,37 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
     return { f: 1, s: 'done' };
   }
 
-  /* ---------- Mapa (canvas) ---------- */
-  const mapEl = $('#map');
-  const canvas = $('#canvas');
-  const ctx = canvas.getContext('2d');
-  const terrain = document.createElement('canvas');
-  const tctx = terrain.getContext('2d');
-  let cw = 0, ch = 0, dpr = 1, scale = 1, ox = 0, oy = 0;
-  let terrainDirty = true, dirty = true;
-  let T = {};
-
-  function readTokens() {
-    const cs = getComputedStyle(document.documentElement);
-    const g = (n) => cs.getPropertyValue(n).trim();
-    T = {
-      bg: g('--map-bg'), p1: g('--map-parcel-1'), p2: g('--map-parcel-2'), p3: g('--map-parcel-3'),
-      rows: g('--map-rows'), water: g('--map-water'), road: g('--map-road'), roadEdge: g('--map-road-edge'),
-      todo: g('--route-todo'), done: g('--route-done'), body: g('--truck-body'), cab: g('--truck-cab'),
-      labelBg: g('--label-bg'), labelInk: g('--label-ink'), labelMuted: g('--label-muted'), labelLine: g('--label-line'),
-      sky: g('--sky'), warn: g('--warn'), ok: g('--ok'), accent: g('--accent')
-    };
-  }
-  const toScreen = (p) => ({ x: ox + p.x * scale, y: oy + p.y * scale });
-  function projectRoute() { if (route) route.scr = route.pts.map(toScreen); }
-
-  function resize() {
-    const rect = mapEl.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    cw = rect.width; ch = rect.height;
-    dpr = Math.min(2, window.devicePixelRatio || 1);
-    canvas.width = terrain.width = Math.round(cw * dpr);
-    canvas.height = terrain.height = Math.round(ch * dpr);
-    scale = Math.min(cw / W, ch / H) * 0.96;
-    ox = (cw - W * scale) / 2; oy = (ch - H * scale) / 2;
-    projectRoute();
-    terrainDirty = dirty = true;
-  }
-
-  function rr(g, x, y, w, h, r) {
-    r = Math.min(r, w / 2, h / 2);
-    g.beginPath();
-    g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
-    g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
-  }
-
-  function drawTerrain() {
-    const g = tctx;
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    g.fillStyle = T.bg; g.fillRect(0, 0, terrain.width, terrain.height);
-    if (!route) return;
-    g.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
-    const x0 = -ox / scale - 60, x1 = (cw - ox) / scale + 60, y0 = -oy / scale - 60, y1 = (ch - oy) / scale + 60;
-    const CW = 58, CH = 46;
-    const fills = [T.p1, T.p2, T.p3, T.p1, T.p3];
-    const rowColor = hexAlpha(T.rows, 0.16);
-    g.lineWidth = 1;
-    for (let iy = Math.floor(y0 / CH); iy * CH < y1; iy++) {
-      for (let ix = Math.floor(x0 / CW); ix * CW < x1; ix++) {
-        const r = mulberry32(route.seed ^ Math.imul(ix, 73856093) ^ Math.imul(iy, 19349663));
-        if (r() < 0.1) continue;
-        const w = CW - 5 - r() * 12, h = CH - 5 - r() * 10;
-        const px = ix * CW + 2 + r() * (CW - 4 - w), py = iy * CH + 2 + r() * (CH - 4 - h);
-        g.fillStyle = fills[Math.floor(r() * fills.length)];
-        rr(g, px, py, w, h, 3); g.fill();
-        if (r() < 0.65) {
-          g.save(); rr(g, px, py, w, h, 3); g.clip();
-          g.strokeStyle = rowColor; g.beginPath();
-          if (r() < 0.5) { for (let i = px + 3; i < px + w; i += 4) { g.moveTo(i, py); g.lineTo(i, py + h); } }
-          else { for (let j = py + 3; j < py + h; j += 4) { g.moveTo(px, j); g.lineTo(px + w, j); } }
-          g.stroke(); g.restore();
-        }
-      }
-    }
-    const r = mulberry32(route.seed ^ 0x5bd1e995);
-    // Río
-    const rx = 280 + r() * 440, ph = r() * 6;
-    g.beginPath();
-    for (let y = y0; y <= y1; y += 8) {
-      const x = rx + Math.sin(y / 85 + ph) * 46 + Math.sin(y / 33 + ph * 2) * 10;
-      if (y === y0) g.moveTo(x, y); else g.lineTo(x, y);
-    }
-    g.strokeStyle = T.water; g.lineWidth = 9; g.lineCap = 'round'; g.lineJoin = 'round'; g.stroke();
-    g.strokeStyle = hexAlpha(T.sky, 0.55); g.lineWidth = 2.5; g.stroke();
-    // Caminos secundarios
-    g.strokeStyle = T.road; g.lineWidth = 3;
-    for (let k = 0; k < 3; k++) {
-      const ya = 40 + r() * 480, yb = 40 + r() * 480;
-      g.beginPath(); g.moveTo(x0, ya);
-      g.bezierCurveTo(lerp(x0, x1, 0.33), ya + (r() - 0.5) * 200, lerp(x0, x1, 0.66), yb + (r() - 0.5) * 200, x1, yb);
-      g.stroke();
-    }
-    for (let k = 0; k < 2; k++) {
-      const xa = 160 + r() * 680;
-      g.beginPath(); g.moveTo(xa, y0);
-      g.bezierCurveTo(xa + (r() - 0.5) * 160, lerp(y0, y1, 0.4), xa + (r() - 0.5) * 160, lerp(y0, y1, 0.6), xa + (r() - 0.5) * 120, y1);
-      g.stroke();
-    }
-  }
-
-  function strokePoly(pts, w, color, dash) {
-    ctx.beginPath();
-    pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
-    ctx.lineWidth = w; ctx.strokeStyle = color; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.setLineDash(dash || []); ctx.stroke(); ctx.setLineDash([]);
-  }
-  function partialPoly(f) {
-    const p = pointAt(f);
-    const out = route.scr.slice(0, p.idx + 1);
-    out.push(toScreen(p));
-    return out;
-  }
-
-  function label(x, y, title, sub, place) {
-    const fTitle = '600 12.5px ' + getFont('--font-body');
-    const fSub = '500 10.5px ' + getFont('--font-body');
-    ctx.font = fTitle; const w1 = ctx.measureText(title).width;
-    ctx.font = fSub; const w2 = sub ? ctx.measureText(sub).width : 0;
-    const w = Math.max(w1, w2) + 18, h = sub ? 38 : 24;
-    let bx = clamp(x - w / 2, 6, cw - w - 6);
-    let by = place === 'below' ? y + 14 : y - h - 14;
-    if (by < 6) by = y + 14;
-    if (by + h > ch - 6) by = y - h - 14;
-    ctx.fillStyle = T.labelBg; ctx.strokeStyle = T.labelLine; ctx.lineWidth = 1;
-    rr(ctx, bx + 0.5, by + 0.5, w, h, 7); ctx.fill(); ctx.stroke();
-    ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
-    if (sub) {
-      ctx.font = fSub; ctx.fillStyle = T.labelMuted; ctx.fillText(sub.toUpperCase(), bx + 9, by + 15);
-      ctx.font = fTitle; ctx.fillStyle = T.labelInk; ctx.fillText(title, bx + 9, by + 30);
-    } else {
-      ctx.font = fTitle; ctx.fillStyle = T.labelInk; ctx.fillText(title, bx + 9, by + 16.5);
-    }
-  }
-  const fontCache = {};
-  function getFont(tok) {
-    if (!fontCache[tok]) fontCache[tok] = getComputedStyle(document.documentElement).getPropertyValue(tok).trim() || 'sans-serif';
-    return fontCache[tok];
-  }
-
-  function drawTruck(x, y, ang, v, lead, k) {
-    const L = 20 * v.len * k, Wd = 8.5 * k;
-    ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
-    if (lead) {
-      ctx.fillStyle = hexAlpha(T.accent, 0.22);
-      ctx.beginPath(); ctx.arc(0, 0, Math.max(L, 14) * 0.85, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.fillStyle = 'rgba(0,0,0,0.18)';
-    rr(ctx, -L / 2 + 1.5, -Wd / 2 + 2, L, Wd, 2.5); ctx.fill();
-    const trailer = L * 0.72;
-    ctx.fillStyle = T.body; rr(ctx, -L / 2, -Wd / 2, trailer, Wd, 2); ctx.fill();
-    if (v.refr) { ctx.fillStyle = T.sky; ctx.fillRect(-L / 2 + 2, -1, trailer - 4, 2); }
-    ctx.fillStyle = T.cab; rr(ctx, -L / 2 + trailer + 1.2, -Wd / 2 + 0.6, L - trailer - 1.2, Wd - 1.2, 2.5); ctx.fill();
-    ctx.fillStyle = T.sky; ctx.fillRect(L / 2 - 2.6 * k, -Wd / 2 + 1.8, 1.6 * k, Wd - 3.6);
-    ctx.restore();
-  }
-
-  function niceStep(dist) {
-    const c = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000];
-    return c.find((s) => dist / s <= 6) || 5000;
-  }
-
-  function draw() {
-    if (!cw || !route || !TL) return;
-    if (terrainDirty) { drawTerrain(); terrainDirty = false; }
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(terrain, 0, 0);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const S = route.scr;
-    const k = clamp(scale * 1.15, 0.7, 1.15);
-
-    // Carretera
-    strokePoly(S, 12 * k, T.roadEdge);
-    strokePoly(S, 8 * k, T.road);
-    strokePoly(S, 2, T.todo, [5, 6]);
-    const lead = stateAt(TL, sim.t);
-    if (lead.f > 0) strokePoly(partialPoly(lead.f), 5 * k, T.done);
-
-    // Kilómetros
-    const step = niceStep(P.distancia);
-    ctx.font = '500 10px ' + getFont('--font-mono');
-    for (let km = step; km < P.distancia - step * 0.35; km += step) {
-      const p = pointAt(km / P.distancia), s = toScreen(p);
-      ctx.fillStyle = T.labelBg; ctx.strokeStyle = T.todo; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(s.x, s.y, 3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      const nx = -Math.sin(p.ang), ny = Math.cos(p.ang);
-      ctx.fillStyle = T.labelMuted; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(`km ${km}`, s.x + nx * 16, s.y + ny * 16);
-    }
-
-    // Paradas
-    const kStops = P.paradas.length;
-    P.paradas.forEach((name, i) => {
-      const f = (i + 1) / (kStops + 1);
-      const s = toScreen(pointAt(f));
-      const reached = lead.f >= f - 1e-6 && sim.t > 0;
-      ctx.fillStyle = reached ? T.warn : T.labelBg; ctx.strokeStyle = T.warn; ctx.lineWidth = 2;
-      rr(ctx, s.x - 5, s.y - 5, 10, 10, 2.5); ctx.fill(); ctx.stroke();
-      label(s.x, s.y, truncate(name, 24), null, i % 2 ? 'above' : 'below');
-    });
-
-    // Origen y destino
-    const O = S[0], D = S[S.length - 1];
-    ctx.fillStyle = T.labelBg; ctx.strokeStyle = T.done; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(O.x, O.y, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    const delivered = lead.s === 'done';
-    ctx.fillStyle = delivered ? T.ok : T.done;
-    ctx.strokeStyle = T.labelBg; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(D.x, D.y, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    label(O.x, O.y, truncate(P.origen, 28), 'Origen', 'above');
-    label(D.x, D.y, truncate(P.destino, 28), delivered ? 'Destino · entregado' : 'Destino', 'above');
-
-    // Vehículos (convoy)
-    const v = VEHICLES.find((x) => x.id === P.vid) || VEHICLES[4];
-    for (let i = sim.n - 1; i >= 0; i--) {
-      const ti = sim.t - i * CONVOY_GAP_H;
-      if (i > 0 && ti <= 0) continue;
-      const st = stateAt(TL, ti);
-      const p = pointAt(Math.max(st.f, 0.0001));
-      const s = toScreen(p);
-      drawTruck(s.x, s.y, p.ang, v, i === 0, k);
-    }
-  }
-
   /* ---------- Simulación ---------- */
-  let P = null, Q = null, TL = null, routeKey = '';
+  let P = null, Q = null, TL = null;
   const sim = { t: 0, end: 1, n: 1, playing: false, last: 0, mode: 'normal' };
-  let shownEvents = -1;
+  let shownEvents = -1, dirty = true;
 
   function setupSim() {
     sim.n = Math.min(Q.viajes, MAX_CONVOY);
     sim.end = TL.total + (sim.n - 1) * CONVOY_GAP_H;
     sim.t = 0; sim.playing = false;
-    shownEvents = -1;
+    shownEvents = -1; lastDoneF = -1;
+    buildTrucks();
     renderEvents();
+    setControls(true);
     updatePlayBtn();
     dirty = true;
   }
+  function setControls(on) { ['#playBtn', '#resetBtn', '#scrub'].forEach((s) => { $(s).disabled = !on; }); }
   function play() {
-    if (!TL) return;
+    if (!TL || !R) return;
     if (sim.t >= sim.end) { sim.t = 0; shownEvents = -1; }
     sim.playing = true; sim.last = performance.now();
     updatePlayBtn();
   }
   function pause() { sim.playing = false; updatePlayBtn(); }
   function updatePlayBtn() {
-    const btn = $('#playBtn');
-    btn.setAttribute('aria-label', sim.playing ? 'Pausar simulación' : (sim.t >= sim.end && sim.t > 0 ? 'Repetir simulación' : 'Iniciar simulación'));
+    $('#playBtn').setAttribute('aria-label', sim.playing ? 'Pausar simulación' : (sim.t >= sim.end && sim.t > 0 ? 'Repetir simulación' : 'Iniciar simulación'));
     $('#playIcon').innerHTML = sim.playing ? '<path d="M3.5 2.5h3v11h-3zM9.5 2.5h3v11h-3z"/>' : '<path d="M4 2.5v11l9-5.5z"/>';
   }
 
   function loop(ts) {
-    if (sim.playing) {
+    if (sim.playing && TL) {
       const dt = Math.min(0.1, (ts - sim.last) / 1000);
       sim.last = ts;
       sim.t = Math.min(sim.end, sim.t + dt * sim.end / REAL_SECONDS[sim.mode]);
@@ -1067,7 +1300,14 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
   }
 
   function updateTelemetry() {
-    if (!TL) return;
+    const pill = $('#statusPill');
+    if (!TL || !R) {
+      ['#tClock', '#tKm', '#tSpeed', '#tEta', '#tDay', '#tKmLeft', '#tSpeedSub', '#tEtaSub'].forEach((s) => { $(s).textContent = '—'; });
+      pill.dataset.s = 'ready';
+      pill.textContent = routeState === 'loading' ? 'Trazando ruta' : 'Sin ruta';
+      $('#scrub').value = 0; $('#scrubPct').textContent = '0 %';
+      return;
+    }
     const salida = parseSalida(P.salida);
     const lead = stateAt(TL, sim.t);
     const now = addHours(salida, sim.t);
@@ -1076,23 +1316,19 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
     const km = lead.f * P.distancia;
     $('#tKm').textContent = `${fmtNum(km)} / ${fmtNum(P.distancia)} km`;
     $('#tKmLeft').textContent = lead.s === 'done' ? 'Ruta completada' : `Faltan ${fmtNum(P.distancia - km)} km`;
-    let speed = 0;
-    if (lead.s === 'drive') speed = Math.round(P.vel + Math.sin(sim.t * 9) * 4 + Math.sin(sim.t * 23) * 2);
+    const speed = lead.s === 'drive' ? Math.round(P.vel + Math.sin(sim.t * 9) * 4 + Math.sin(sim.t * 23) * 2) : 0;
     $('#tSpeed').textContent = `${speed} km/h`;
     $('#tSpeedSub').textContent = lead.s === 'stop' ? `Detenido en ${lead.name}` : lead.s === 'drive' ? `Promedio ${fmtNum(P.vel)} km/h` : lead.s === 'done' ? 'Motor apagado' : 'En patio de carga';
     const eta = addHours(salida, TL.total);
     $('#tEta').textContent = fmtTime(eta);
     $('#tEtaSub').textContent = sim.n > 1 ? `${fmtDay(eta)} · última unidad ${fmtTime(addHours(salida, sim.end))}` : fmtDay(eta);
 
-    // Estado
-    const pill = $('#statusPill');
     let s = lead.s, txt = 'Listo para salir';
     if (s === 'drive') txt = 'En ruta';
     if (s === 'stop') txt = `En parada · ${truncate(lead.name, 22)}`;
     if (s === 'done') {
       const arrived = Array.from({ length: sim.n }, (_, i) => stateAt(TL, sim.t - i * CONVOY_GAP_H).s === 'done').filter(Boolean).length;
-      if (arrived < sim.n) { s = 'drive'; txt = `Entregando · ${arrived} de ${sim.n} unidades`; }
-      else txt = 'Entregado';
+      if (arrived < sim.n) { s = 'drive'; txt = `Entregando · ${arrived} de ${sim.n} unidades`; } else txt = 'Entregado';
     }
     pill.dataset.s = s; pill.textContent = txt;
 
@@ -1100,8 +1336,8 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
     $('#scrub').value = Math.round(frac * 1000);
     $('#scrubPct').textContent = `${fmtNum(frac * 100)} %`;
 
-    const count = TL.events.filter((e) => e.t <= sim.t + 1e-9 && sim.t > 0).length;
-    if (count !== shownEvents) { shownEvents = count; markEvents(count); }
+    const count = TL.shown ? TL.shown.filter((e) => sim.t > 0 && e.t <= sim.t + 1e-9).length : 0;
+    if (count !== shownEvents) { shownEvents = count; markEvents(); }
   }
 
   function renderEvents() {
@@ -1118,15 +1354,34 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
     TL.shown.forEach((e, i) => {
       const done = sim.t > 0 && e.t <= sim.t + 1e-9;
       if (done) any = true;
-      items[i] && items[i].classList.toggle('done', done);
+      if (items[i]) items[i].classList.toggle('done', done);
     });
     $('#logHint').textContent = any ? 'Registro en tiempo simulado' : 'Horario programado';
   }
 
   /* ---------- Render de cotización ---------- */
+  function clearResults() {
+    TL = null; Q = null;
+    truckMarkers.forEach((m) => m.remove()); truckMarkers = [];
+    setControls(false); pause();
+    $('#qTotal').textContent = '—';
+    $('#qTotalSub').textContent = routeState === 'loading' ? 'Calculando con la ruta…' : 'Traza la ruta para calcular la cotización.';
+    ['#sViajes', '#sUso', '#sTiempo'].forEach((s) => { $(s).textContent = '—'; });
+    $('#qRows').innerHTML = ''; $('#notes').innerHTML = '';
+    $('#events').innerHTML = '<li class="placeholder">El itinerario aparece cuando la ruta está trazada.</li>';
+    $('#logHint').textContent = 'Horario programado';
+    $('#scrubDur').textContent = '—';
+    const o = isConfirmed('origen') ? places.origen.name : null, d = isConfirmed('destino') ? places.destino.name : null;
+    $('#routeTitle').innerHTML = o && d ? `${esc(o)}<span class="arrow" aria-hidden="true">→</span><span class="visually-hidden">a</span>${esc(d)}` : 'Elige origen y destino';
+    $('#simEyebrow').textContent = 'Simulación de ruta';
+    $('#convoyNote').hidden = true;
+    dirty = true;
+  }
+
   function renderQuote() {
     const c = P.moneda, m = (v) => fmtMoney(v, c);
     const v = VEHICLES.find((x) => x.id === P.vid);
+    const prod = PRODUCTS.find((x) => x.id === P.producto);
     $('#qTotal').textContent = m(Q.total);
     $('#qTotalSub').textContent = `${m(Q.porTon)} por tonelada · ${m(Q.porKm)} por km`;
     $('#sViajes').textContent = fmtNum(Q.viajes);
@@ -1140,37 +1395,37 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
       <dt>Peajes${P.retorno ? ' (ida y vuelta)' : ''}</dt><dd>${m(Q.peajes)}</dd>
       <div class="sep"></div>
       <dt class="strong">Subtotal</dt><dd class="strong">${m(Q.subtotal)}</dd>
-      <dt>Impuesto ${fmtNum(P.iva, P.iva % 1 ? 1 : 0)} %</dt><dd>${m(Q.impuesto)}</dd>
+      <dt>Impuesto ${fmtT(P.iva)} %</dt><dd>${m(Q.impuesto)}</dd>
       <dt class="strong">Total</dt><dd class="strong">${m(Q.total)}</dd>`;
 
     const notes = [];
-    const prod = PRODUCTS.find((x) => x.id === P.producto);
     if (prod && prod.per && !(v && v.refr)) notes.push({ w: true, t: `${prod.name} es perecedero. Se recomienda una unidad refrigerada.` });
-    if (Q.viajes > 1) notes.push({ t: `${fmtNum(P.cantidad, P.cantidad % 1 ? 1 : 0)} t superan la capacidad de ${fmtNum(P.cap, P.cap % 1 ? 1 : 0)} t: se necesitan ${Q.viajes} viajes.` });
+    if (Q.viajes > 1) notes.push({ t: `${fmtT(P.cantidad)} t superan la capacidad de ${fmtT(P.cap)} t: se necesitan ${Q.viajes} viajes.` });
     if (Q.viajes > MAX_CONVOY) notes.push({ t: `La simulación muestra ${MAX_CONVOY} unidades en convoy; la cotización incluye los ${Q.viajes} viajes.` });
     if (Q.uso < 0.5) notes.push({ w: true, t: `Aprovechamiento bajo (${fmtNum(Q.uso * 100)} %). Un vehículo más pequeño podría abaratar el flete.` });
     if (Q.hManejo > 8) notes.push({ w: true, t: `Son ${fmtDur(Q.hManejo)} de manejo. Considera paradas de descanso para el operador.` });
     $('#notes').innerHTML = notes.map((n) => `<li class="${n.w ? 'warn' : ''}">${esc(n.t)}</li>`).join('');
 
-    $('#routeTitle').innerHTML = `${esc(P.origen)}<span class="arrow" aria-hidden="true">→</span><span class="visually-hidden">a</span>${esc(P.destino)}`;
-    $('#simEyebrow').textContent = `${v ? v.name : ''} · ${fmtNum(P.cantidad, P.cantidad % 1 ? 1 : 0)} t de ${prod ? prod.name.toLowerCase() : ''} · ${fmtNum(P.distancia)} km`;
+    $('#routeTitle').innerHTML = `${esc(R.origen.name)}<span class="arrow" aria-hidden="true">→</span><span class="visually-hidden">a</span>${esc(R.destino.name)}`;
+    $('#simEyebrow').textContent = `${v ? v.name : ''} · ${fmtT(P.cantidad)} t de ${prod ? prod.name.toLowerCase() : ''} · ${fmtNum(P.distancia)} km`;
     $('#scrubDur').textContent = `${fmtDur(Q.hViaje)} de viaje`;
     const note = $('#convoyNote');
-    note.hidden = sim.n <= 1 && Q.viajes <= 1;
-    note.textContent = Q.viajes > 1 ? `Convoy de ${Math.min(Q.viajes, MAX_CONVOY)} unidades · ${Q.viajes} viajes en total` : '';
+    note.hidden = Q.viajes <= 1;
+    note.textContent = Q.viajes > 1 ? `Convoy de ${sim.n} unidades · ${Q.viajes} viajes en total` : '';
   }
 
   function summaryText(folio) {
     const v = VEHICLES.find((x) => x.id === P.vid);
     const prod = PRODUCTS.find((x) => x.id === P.producto);
     const salida = parseSalida(P.salida);
+    const llegada = addHours(salida, TL.total);
     return [
       `Flete agrícola${folio ? ' ' + folio : ''}`,
-      `Ruta: ${P.origen} → ${P.destino} (${fmtNum(P.distancia)} km)`,
-      P.paradas.length ? `Paradas: ${P.paradas.join(', ')}` : null,
-      `Carga: ${fmtNum(P.cantidad, P.cantidad % 1 ? 1 : 0)} t de ${prod ? prod.name : ''} (${P.presentacion})`,
+      `Ruta: ${placeText(R.origen)} → ${placeText(R.destino)} (${fmtNum(P.distancia)} km por carretera)`,
+      R.paradas.length ? `Paradas: ${R.paradas.map((s) => s.name).join(', ')}` : null,
+      `Carga: ${fmtT(P.cantidad)} t de ${prod ? prod.name : ''} (${P.presentacion})`,
       `Vehículo: ${v ? v.name : ''} · ${Q.viajes} viaje(s) · aprovechamiento ${fmtNum(Q.uso * 100)} %`,
-      `Salida: ${fmtDay(salida)} ${fmtTime(salida)} · Llegada estimada: ${fmtDay(addHours(salida, Q.hViaje))} ${fmtTime(addHours(salida, Q.hViaje))}`,
+      `Salida: ${fmtDay(salida)} ${fmtTime(salida)} · Llegada estimada: ${fmtDay(llegada)} ${fmtTime(llegada)}`,
       `Total: ${fmtMoney(Q.total, P.moneda)} (${fmtMoney(Q.porTon, P.moneda)} por tonelada)`
     ].filter(Boolean).join('\n');
   }
@@ -1195,8 +1450,8 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
         const sal = parseSalida(h.p.salida);
         return `<tr>
           <td><span class="folio">${esc(h.folio)}</span><span class="sub">${esc(fmtDay(sal))} ${esc(fmtTime(sal))}</span></td>
-          <td>${esc(truncate(h.p.origen, 26))} → ${esc(truncate(h.p.destino, 26))}<span class="sub">${fmtNum(h.p.distancia)} km</span></td>
-          <td>${fmtNum(h.p.cantidad, h.p.cantidad % 1 ? 1 : 0)} t<span class="sub">${esc(prod ? prod.name : '')}</span></td>
+          <td>${esc(truncate(h.p.origen.name, 24))} → ${esc(truncate(h.p.destino.name, 24))}<span class="sub">${fmtNum(h.distancia)} km${h.p.paradas.length ? ` · ${h.p.paradas.length} parada(s)` : ''}</span></td>
+          <td>${fmtT(h.p.cantidad)} t<span class="sub">${esc(prod ? prod.name : '')}</span></td>
           <td>${esc(v ? v.name : '')}<span class="sub">${h.viajes} viaje(s)</span></td>
           <td class="num">${esc(fmtMoney(h.total, h.p.moneda))}</td>
           <td><div class="row-actions"><button type="button" class="btn-ghost" data-act="sim" data-i="${i}">Simular</button><button type="button" class="btn-ghost" data-act="del" data-i="${i}">Eliminar</button></div></td>
@@ -1208,9 +1463,9 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
     if (!b) return;
     const i = +b.dataset.i;
     if (b.dataset.act === 'sim' && hist[i]) {
+      hideSample();
       fillForm(hist[i].p);
-      refresh();
-      play();
+      requestRoute({ autoplay: true });
       $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' });
     } else if (b.dataset.act === 'del') {
       if (b.dataset.armed) { hist.splice(i, 1); saveHist(); renderHist(); }
@@ -1224,12 +1479,12 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
   /* ---------- Flujo principal ---------- */
   function refresh() {
     const p = readParams();
-    const errs = validate(p);
+    const errs = validateParams(p);
     $('#formMsg').textContent = errs.join(' ');
-    if (errs.length) return false;
+    if (errs.length || !R || routeState !== 'ok') { P = p; clearResults(); return false; }
+    p.distancia = R.distance;
+    p.paradas = R.paradas.slice();
     P = p; Q = quote(P);
-    const key = P.origen.toLowerCase() + '→' + P.destino.toLowerCase();
-    if (key !== routeKey) { routeKey = key; buildRoute(key); terrainDirty = true; }
     TL = buildTimeline(P);
     setupSim();
     renderQuote();
@@ -1239,7 +1494,8 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
 
   let debounce = 0;
   form.addEventListener('input', (e) => {
-    $('#sampleNote').hidden = true;
+    if (e.target.getAttribute('role') === 'combobox') return;   // los lugares se manejan aparte
+    hideSample();
     clearTimeout(debounce);
     debounce = setTimeout(refresh, 180);
   });
@@ -1249,27 +1505,33 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     clearTimeout(debounce);
+    const errs = validateRoute().concat(validateParams(readParams()));
+    if (errs.length) { $('#formMsg').textContent = errs.join(' '); return; }
     if (!refresh()) return;
     const next = hist.reduce((mx, h) => Math.max(mx, parseInt(String(h.folio).replace(/\D/g, ''), 10) || 0), 0) + 1;
     const folio = 'FA-' + String(next).padStart(4, '0');
-    hist.unshift({ folio, creado: new Date().toISOString(), p: P, total: Q.total, viajes: Q.viajes });
+    hist.unshift({ folio, creado: new Date().toISOString(), p: { ...P }, total: Q.total, viajes: Q.viajes, distancia: P.distancia });
     saveHist(); renderHist();
     play();
-    if (window.matchMedia('(max-width: 980px)').matches) mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (window.matchMedia('(max-width: 980px)').matches) $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
 
   $('#playBtn').addEventListener('click', () => (sim.playing ? pause() : play()));
-  $('#resetBtn').addEventListener('click', () => { sim.t = 0; pause(); shownEvents = -1; dirty = true; });
+  $('#resetBtn').addEventListener('click', () => {
+    sim.t = 0; pause(); shownEvents = -1; dirty = true;
+    if (map && R) map.fitBounds(L.latLngBounds(R.coords), { padding: [50, 50] });
+  });
   $('#scrub').addEventListener('input', (e) => { sim.t = (+e.target.value / 1000) * sim.end; pause(); dirty = true; });
   document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
     sim.mode = b.dataset.mode;
     document.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
   }));
+  $('#follow').addEventListener('change', () => { dirty = true; });
 
   $('#copyBtn').addEventListener('click', async () => {
-    if (!P) return;
     const btn = $('#copyBtn');
-    const text = summaryText(hist[0] && hist[0].p === P ? hist[0].folio : '');
+    if (!P || !Q || !R) { btn.textContent = 'Traza la ruta primero'; setTimeout(() => { btn.textContent = 'Copiar resumen'; }, 1800); return; }
+    const text = summaryText(hist[0] && hist[0].distancia === P.distancia && hist[0].total === Q.total ? hist[0].folio : '');
     let ok = false;
     try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {
       const ta = document.createElement('textarea');
@@ -1282,22 +1544,18 @@ td .sub { display: block; font-size: 12px; color: var(--muted); }
     setTimeout(() => { btn.textContent = 'Copiar resumen'; }, 1800);
   });
 
-  // Tema
-  function retheme() { readTokens(); terrainDirty = dirty = true; }
+  // Tema: cambiar los mosaicos del mapa entre claro y oscuro
+  function retheme() { if (tiles) tiles.setUrl(tileUrl()); dirty = true; }
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', retheme);
   new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; });
 
   // Arranque con el flete de ejemplo
-  readTokens();
+  initMap();
   fillForm(SAMPLE);
-  new ResizeObserver(resize).observe(mapEl);
-  resize();
-  refresh();
   renderHist();
   requestAnimationFrame(loop);
-  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) play();
-  else { sim.t = TL ? TL.total * 0.45 : 0; dirty = true; }
+  if (!hasLeaflet) showMapMsg('No se pudo cargar el mapa. Revisa tu conexión a internet y recarga la página.');
+  requestRoute({ autoplay: !window.matchMedia('(prefers-reduced-motion: reduce)').matches });
 })();
 </script>
 </body>
