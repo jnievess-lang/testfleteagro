@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FleteAgro</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Cotizador y simulador de fletes para productoras agrícolas.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: formulario de flete por pasos a la izquierda; a la derecha el mapa de simulación
+   arriba, cotización + bitácora debajo y el historial de fletes al final. */
+:root {
+  /* Paleta de marca */
+  --sky: #C0DCEE;
+  --glacier: #86C3DB;
+  --cornflower: #5C95CE;
+  --steel: #3D76A8;
+  --deep: #1A4C76;
+
+  /* Neutros con sesgo azul */
+  --bg: #F4F8FB;
+  --surface: #FFFFFF;
+  --surface-2: #EAF3F9;
+  --ink: #0F2A42;
+  --muted: #557089;
+  --line: #DAE7F0;
+  --line-strong: #C3D7E5;
+  --accent: var(--steel);
+  --accent-strong: var(--deep);
+  --on-accent: #FFFFFF;
+
+  /* Estados */
+  --ok: #2F7D62;
+  --warn: #A86A12;
+  --warn-bg: #FBF1E1;
+  --danger: #B0413A;
+  --info-bg: #EAF3F9;
+
+  /* Mapa */
+  --map-bg: #EEF5FA;
+  --map-parcel-1: #DDEBF5;
+  --map-parcel-2: #C0DCEE;
+  --map-parcel-3: #E6F0F7;
+  --map-rows: #3D76A8;
+  --map-water: #86C3DB;
+  --map-road: #FFFFFF;
+  --map-road-edge: #B9D3E6;
+  --route-todo: #5C95CE;
+  --route-done: #1A4C76;
+  --truck-body: #1A4C76;
+  --truck-cab: #5C95CE;
+  --label-bg: #FFFFFF;
+  --label-ink: #0F2A42;
+  --label-muted: #557089;
+  --label-line: #C3D7E5;
+
+  /* Tipografía */
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0A1826;
+    --surface: #0F2234;
+    --surface-2: #14304A;
+    --ink: #E3EEF6;
+    --muted: #8EABC2;
+    --line: #1C3750;
+    --line-strong: #27496A;
+    --accent: #86C3DB;
+    --accent-strong: #C0DCEE;
+    --on-accent: #0A1826;
+    --ok: #5CC4A0;
+    --warn: #E3B162;
+    --warn-bg: #2B2414;
+    --danger: #E57F76;
+    --info-bg: #14304A;
+    --map-bg: #0C1F31;
+    --map-parcel-1: #112A41;
+    --map-parcel-2: #17344F;
+    --map-parcel-3: #0F263B;
+    --map-rows: #86C3DB;
+    --map-water: #3D76A8;
+    --map-road: #1E3E5C;
+    --map-road-edge: #091725;
+    --route-todo: #5C95CE;
+    --route-done: #C0DCEE;
+    --truck-body: #C0DCEE;
+    --truck-cab: #86C3DB;
+    --label-bg: #0F2234;
+    --label-ink: #E3EEF6;
+    --label-muted: #8EABC2;
+    --label-line: #27496A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0A1826;
+  --surface: #0F2234;
+  --surface-2: #14304A;
+  --ink: #E3EEF6;
+  --muted: #8EABC2;
+  --line: #1C3750;
+  --line-strong: #27496A;
+  --accent: #86C3DB;
+  --accent-strong: #C0DCEE;
+  --on-accent: #0A1826;
+  --ok: #5CC4A0;
+  --warn: #E3B162;
+  --warn-bg: #2B2414;
+  --danger: #E57F76;
+  --info-bg: #14304A;
+  --map-bg: #0C1F31;
+  --map-parcel-1: #112A41;
+  --map-parcel-2: #17344F;
+  --map-parcel-3: #0F263B;
+  --map-rows: #86C3DB;
+  --map-water: #3D76A8;
+  --map-road: #1E3E5C;
+  --map-road-edge: #091725;
+  --route-todo: #5C95CE;
+  --route-done: #C0DCEE;
+  --truck-body: #C0DCEE;
+  --truck-cab: #86C3DB;
+  --label-bg: #0F2234;
+  --label-ink: #E3EEF6;
+  --label-muted: #8EABC2;
+  --label-line: #27496A;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.5 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 48px;
+}
+h1, h2, h3 { text-wrap: balance; }
+button { font: inherit; }
+
+/* Encabezado */
+.top {
+  max-width: 1360px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-block: 22px 20px;
+}
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.logo { width: 38px; height: 38px; flex: none; }
+.logo .b1 { fill: var(--sky); } .logo .b2 { fill: var(--glacier); } .logo .b3 { fill: var(--cornflower); }
+.logo .b4 { fill: var(--steel); } .logo .b5 { fill: var(--deep); }
+.brand h1 { font-family: var(--font-display); font-weight: 700; font-size: 25px; line-height: 1.1; margin: 0; letter-spacing: -0.015em; }
+.brand p { margin: 2px 0 0; color: var(--muted); font-size: 13.5px; }
+.swatches { display: flex; gap: 4px; }
+.swatches span { width: 22px; height: 8px; border-radius: 4px; }
+
+/* Rejilla principal */
+.layout {
+  max-width: 1360px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(300px, 390px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 980px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+
+/* Formulario */
+.panel { padding: 20px; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.sample-note {
+  font-size: 13px; color: var(--muted); background: var(--info-bg);
+  border-radius: 10px; padding: 9px 12px; margin: 0;
+}
+.step { display: flex; flex-direction: column; gap: 12px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.step-h { display: flex; align-items: baseline; gap: 10px; padding: 0; margin-bottom: 12px; }
+.step-n { font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-weight: 500; }
+.step-h h2 { font-family: var(--font-display); font-size: 18px; font-weight: 500; margin: 0; letter-spacing: -0.01em; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.grid2 .wide { grid-column: 1 / -1; }
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.lbl, .field > label {
+  font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600;
+}
+.hint { font-size: 12px; color: var(--muted); }
+input, select {
+  font: inherit; font-size: 14.5px; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 10px;
+  width: 100%; min-width: 0;
+}
+input[type="number"] { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+input:hover, select:hover { border-color: var(--cornflower); }
+input:focus-visible, select:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+.unit { position: relative; }
+.unit input { padding-right: 52px; }
+.unit span {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); pointer-events: none;
+}
+.vehicles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.veh { position: relative; display: block; }
+.veh input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.veh-box {
+  display: flex; flex-direction: column; gap: 3px; height: 100%;
+  padding: 10px 11px; border: 1px solid var(--line-strong); border-radius: 10px;
+  cursor: pointer; transition: border-color .15s, background-color .15s;
+}
+.veh-box:hover { border-color: var(--cornflower); }
+.veh input:checked + .veh-box { border-color: var(--accent-strong); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--accent-strong); }
+.veh input:focus-visible + .veh-box { outline: 2px solid var(--accent); outline-offset: 2px; }
+.veh svg { height: 22px; width: auto; max-width: 100%; margin-bottom: 4px; }
+.vi-body { fill: var(--steel); } .vi-cab { fill: var(--cornflower); } .vi-wheel { fill: var(--ink); }
+.vi-win { fill: var(--sky); } .vi-cold { fill: var(--sky); }
+.veh-name { font-weight: 600; font-size: 13.5px; line-height: 1.25; }
+.veh-cap { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.subhead { font-size: 12.5px; color: var(--muted); margin: 2px 0 -4px; }
+.check { display: flex; gap: 9px; align-items: flex-start; font-size: 14px; cursor: pointer; }
+.check input { width: 17px; height: 17px; margin: 2px 0 0; accent-color: var(--steel); flex: none; }
+.check small { display: block; color: var(--muted); font-size: 12.5px; }
+.actions { display: flex; flex-direction: column; gap: 10px; }
+.btn-primary {
+  background: var(--accent-strong); color: var(--on-accent); border: 0; border-radius: 10px;
+  padding: 13px 16px; font-weight: 600; font-size: 15px; cursor: pointer; transition: filter .15s;
+}
+.btn-primary:hover { filter: brightness(1.12); }
+.btn-ghost {
+  background: transparent; color: var(--ink); border: 1px solid var(--line-strong);
+  border-radius: 8px; padding: 6px 11px; font-size: 13px; font-weight: 500; cursor: pointer;
+}
+.btn-ghost:hover { border-color: var(--cornflower); background: var(--surface-2); }
+.form-msg { font-size: 13.5px; color: var(--danger); margin: 0; }
+.form-msg:empty { display: none; }
+
+/* Columna principal */
+.main { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.sim { overflow: hidden; }
+.sim-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px 16px;
+  padding: 16px 18px; flex-wrap: wrap;
+}
+.sim-head > div { min-width: 0; }
+.eyebrow { font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.route-title {
+  font-family: var(--font-display); font-weight: 500; font-size: 21px; line-height: 1.2;
+  margin: 2px 0 0; letter-spacing: -0.01em; overflow-wrap: anywhere;
+}
+.route-title .arrow { color: var(--cornflower); padding: 0 4px; }
+.pill {
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  font-size: 13px; font-weight: 600; padding: 5px 11px; border-radius: 999px;
+  background: var(--surface-2); color: var(--ink);
+}
+.pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--dot, var(--muted)); }
+.pill[data-s="drive"] { --dot: var(--cornflower); }
+.pill[data-s="stop"] { --dot: var(--warn); }
+.pill[data-s="done"] { --dot: var(--ok); }
+.map { position: relative; aspect-ratio: 16 / 9; max-width: 100%; background: var(--map-bg); border-block: 1px solid var(--line); }
+.map canvas { display: block; width: 100%; height: 100%; }
+.convoy-note {
+  position: absolute; left: 12px; bottom: 12px; margin: 0;
+  font-size: 12px; background: var(--label-bg); color: var(--label-ink);
+  border: 1px solid var(--label-line); border-radius: 8px; padding: 5px 9px;
+  font-variant-numeric: tabular-nums; max-width: calc(100% - 24px);
+}
+@media (max-width: 640px) { .map { aspect-ratio: 4 / 3; } }
+
+.controls { display: flex; align-items: center; gap: 12px; padding: 12px 18px; flex-wrap: wrap; }
+.iconbtn {
+  width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line-strong);
+  background: var(--surface); color: var(--ink); display: grid; place-items: center; cursor: pointer; flex: none;
+}
+.iconbtn:hover { border-color: var(--cornflower); }
+.iconbtn.play { background: var(--accent-strong); color: var(--on-accent); border-color: transparent; }
+.iconbtn svg { width: 16px; height: 16px; fill: currentColor; }
+.scrub { flex: 1 1 180px; min-width: 140px; display: flex; flex-direction: column; gap: 2px; }
+.scrub input { padding: 0; border: 0; accent-color: var(--steel); height: 22px; background: transparent; }
+.scrub-meta { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 999px; padding: 2px; }
+.seg button {
+  border: 0; background: none; font-size: 12.5px; padding: 5px 12px; border-radius: 999px;
+  color: var(--muted); cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); font-weight: 600; }
+
+.telemetry { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); }
+.telemetry > div { padding: 12px 18px; display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--line); min-width: 0; }
+.telemetry > div:first-child { border-left: 0; }
+.t-val { font-family: var(--font-mono); font-size: 17px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 640px) {
+  .telemetry { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .telemetry > div:nth-child(3) { border-left: 0; }
+  .telemetry > div:nth-child(n+3) { border-top: 1px solid var(--line); }
+}
+
+.split { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px; }
+@media (max-width: 760px) { .split { grid-template-columns: minmax(0, 1fr); } }
+.box { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.box-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.box-h h2 { font-family: var(--font-display); font-weight: 500; font-size: 18px; margin: 0; letter-spacing: -0.01em; }
+.total { font-family: var(--font-display); font-weight: 700; font-size: 36px; line-height: 1.05; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.total-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.stats {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px;
+  background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+}
+.stats > div { background: var(--surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stats .v { font-family: var(--font-mono); font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.stats .k { font-size: 11.5px; color: var(--muted); }
+.kv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px 16px; margin: 0; font-size: 14px; }
+.kv dt { color: var(--muted); min-width: 0; }
+.kv dt small { font-size: 12px; opacity: 0.85; }
+.kv dd { margin: 0; text-align: right; font-family: var(--font-mono); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.kv .sep { grid-column: 1 / -1; border-top: 1px solid var(--line); height: 0; }
+.kv .strong { color: var(--ink); font-weight: 600; }
+.notes { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.notes li { font-size: 13px; border-radius: 8px; padding: 8px 11px; background: var(--info-bg); color: var(--ink); }
+.notes li.warn { background: var(--warn-bg); }
+.notes li.warn::before { content: "Atención · "; font-weight: 600; color: var(--warn); }
+
+.events { list-style: none; margin: 0; padding: 0; max-height: 330px; overflow-y: auto; }
+.events li { display: grid; grid-template-columns: 52px 14px minmax(0, 1fr); gap: 10px; align-items: start; position: relative; padding-bottom: 12px; }
+.events li::after {
+  content: ""; position: absolute; left: 67px; top: 14px; bottom: -2px; width: 2px; background: var(--line);
+}
+.events li:last-child::after { display: none; }
+.events li:last-child { padding-bottom: 0; }
+.ev-time { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); padding-top: 1px; font-variant-numeric: tabular-nums; }
+.ev-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line-strong); background: var(--surface); margin-top: 4px; position: relative; z-index: 1; }
+.ev-txt { font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.events li.done .ev-dot { background: var(--accent-strong); border-color: var(--accent-strong); }
+.events li.done .ev-txt { color: var(--ink); }
+.events li.done .ev-time { color: var(--ink); }
+.events li.stop.done .ev-dot { background: var(--warn); border-color: var(--warn); }
+.events li.end.done .ev-dot { background: var(--ok); border-color: var(--ok); }
+
+.table-wrap { overflow-x: auto; margin: 0 -4px; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th {
+  text-align: left; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+td { padding: 10px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+td .folio { font-family: var(--font-mono); font-weight: 500; }
+td .sub { display: block; font-size: 12px; color: var(--muted); }
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.empty { color: var(--muted); font-size: 14px; margin: 0; }
+
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 40 40" aria-hidden="true">
+      <rect class="b1" x="3" y="5" width="34" height="4.6" rx="2.3"/>
+      <rect class="b2" x="6" y="12.2" width="28" height="4.6" rx="2.3"/>
+      <rect class="b3" x="9" y="19.4" width="22" height="4.6" rx="2.3"/>
+      <rect class="b4" x="12" y="26.6" width="16" height="4.6" rx="2.3"/>
+      <rect class="b5" x="15" y="33.8" width="10" height="4.6" rx="2.3"/>
+    </svg>
+    <div>
+      <h1>FleteAgro</h1>
+      <p>Cotiza y simula fletes para tu producción agrícola</p>
+    </div>
+  </div>
+  <div class="swatches" aria-hidden="true">
+    <span style="background:var(--sky)"></span><span style="background:var(--glacier)"></span><span style="background:var(--cornflower)"></span><span style="background:var(--steel)"></span><span style="background:var(--deep)"></span>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- Formulario -->
+  <form id="form" class="card panel" novalidate>
+    <p class="sample-note" id="sampleNote">Se cargó un flete de ejemplo. Reemplaza los datos con los tuyos y pulsa <strong>Generar flete</strong>.</p>
+
+    <fieldset class="step">
+      <legend class="step-h"><span class="step-n">01</span><h2>Vehículo</h2></legend>
+      <div class="vehicles" id="vehicles" role="radiogroup" aria-label="Tipo de vehículo"></div>
+      <p class="subhead">Parámetros de la unidad (puedes ajustarlos)</p>
+      <div class="grid2">
+        <div class="field"><label for="cap">Capacidad</label><div class="unit"><input id="cap" type="number" min="0.1" step="0.1" inputmode="decimal"><span>t</span></div></div>
+        <div class="field"><label for="vel">Velocidad prom.</label><div class="unit"><input id="vel" type="number" min="1" step="1" inputmode="numeric"><span>km/h</span></div></div>
+        <div class="field"><label for="tarifa">Tarifa</label><div class="unit"><input id="tarifa" type="number" min="0" step="0.5" inputmode="decimal"><span>/km</span></div></div>
+        <div class="field"><label for="rend">Rendimiento</label><div class="unit"><input id="rend" type="number" min="0.1" step="0.1" inputmode="decimal"><span>km/L</span></div></div>
+      </div>
+    </fieldset>
+
+    <fieldset class="step">
+      <legend class="step-h"><span class="step-n">02</span><h2>Carga</h2></legend>
+      <div class="grid2">
+        <div class="field wide"><label for="producto">Producto</label><select id="producto"></select></div>
+        <div class="field"><label for="cantidad">Cantidad</label><div class="unit"><input id="cantidad" type="number" min="0.1" step="0.1" inputmode="decimal"><span>t</span></div></div>
+        <div class="field"><label for="presentacion">Presentación</label>
+          <select id="presentacion">
+            <option>Granel</option><option>Sacos</option><option>Cajas</option><option>Tarimas</option><option>Pacas</option><option>Tanque</option>
+          </select>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="step">
+      <legend class="step-h"><span class="step-n">03</span><h2>Ruta</h2></legend>
+      <div class="grid2">
+        <div class="field wide"><label for="origen">Origen</label><input id="origen" type="text" autocomplete="off" placeholder="Finca, rancho o bodega"></div>
+        <div class="field wide"><label for="destino">Destino</label><input id="destino" type="text" autocomplete="off" placeholder="Centro de acopio, mercado o planta"></div>
+        <div class="field"><label for="distancia">Distancia</label><div class="unit"><input id="distancia" type="number" min="1" step="1" inputmode="numeric"><span>km</span></div></div>
+        <div class="field"><label for="minParada">Min. por parada</label><div class="unit"><input id="minParada" type="number" min="0" step="5" inputmode="numeric"><span>min</span></div></div>
+        <div class="field wide"><label for="paradas">Paradas intermedias</label><input id="paradas" type="text" autocomplete="off" placeholder="Separadas por coma (opcional)"><span class="hint">Hasta 6 paradas: básculas, casetas, puntos de revisión.</span></div>
+        <div class="field wide"><label for="salida">Fecha y hora de salida</label><input id="salida" type="datetime-local"></div>
+      </div>
+    </fieldset>
+
+    <fieldset class="step">
+      <legend class="step-h"><span class="step-n">04</span><h2>Costos</h2></legend>
+      <div class="grid2">
+        <div class="field"><label for="moneda">Moneda</label>
+          <select id="moneda">
+            <option value="MXN">MXN · Peso mexicano</option>
+            <option value="USD">USD · Dólar</option>
+            <option value="COP">COP · Peso colombiano</option>
+            <option value="PEN">PEN · Sol</option>
+            <option value="CLP">CLP · Peso chileno</option>
+            <option value="ARS">ARS · Peso argentino</option>
+            <option value="GTQ">GTQ · Quetzal</option>
+            <option value="EUR">EUR · Euro</option>
+          </select>
+        </div>
+        <div class="field"><label for="combustible">Diésel</label><div class="unit"><input id="combustible" type="number" min="0" step="0.1" inputmode="decimal"><span>/L</span></div></div>
+        <div class="field"><label for="maniobras">Maniobras</label><div class="unit"><input id="maniobras" type="number" min="0" step="10" inputmode="decimal"><span>/viaje</span></div></div>
+        <div class="field"><label for="peajes">Peajes</label><div class="unit"><input id="peajes" type="number" min="0" step="10" inputmode="decimal"><span>/viaje</span></div></div>
+        <div class="field"><label for="iva">Impuesto (IVA)</label><div class="unit"><input id="iva" type="number" min="0" max="100" step="1" inputmode="decimal"><span>%</span></div></div>
+        <label class="check wide"><input id="retorno" type="checkbox"><span>Cobrar retorno en vacío<small>Suma 50&nbsp;% a la tarifa por km, más diésel y peajes de regreso.</small></span></label>
+      </div>
+    </fieldset>
+
+    <div class="actions">
+      <p class="form-msg" id="formMsg" role="alert"></p>
+      <button class="btn-primary" type="submit" id="submitBtn">Generar flete y simular</button>
+    </div>
+  </form>
+
+  <!-- Simulación y resultados -->
+  <div class="main">
+    <section class="card sim" aria-labelledby="routeTitle">
+      <div class="sim-head">
+        <div>
+          <div class="eyebrow" id="simEyebrow">Simulación de ruta</div>
+          <h2 class="route-title" id="routeTitle">—</h2>
+        </div>
+        <span class="pill" id="statusPill" data-s="ready">Listo para salir</span>
+      </div>
+      <div class="map" id="map">
+        <canvas id="canvas" role="img" aria-label="Mapa con la ruta del flete y la posición del vehículo"></canvas>
+        <p class="convoy-note" id="convoyNote" hidden></p>
+      </div>
+      <div class="controls">
+        <button type="button" class="iconbtn play" id="playBtn" aria-label="Iniciar simulación">
+          <svg viewBox="0 0 16 16" id="playIcon"><path d="M4 2.5v11l9-5.5z"/></svg>
+        </button>
+        <button type="button" class="iconbtn" id="resetBtn" aria-label="Reiniciar simulación">
+          <svg viewBox="0 0 16 16"><path d="M8 2.5a5.5 5.5 0 1 1-5.2 3.7l1.4.5A4 4 0 1 0 8 4v2L4.8 3.2 8 .5z"/></svg>
+        </button>
+        <div class="scrub">
+          <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Avance de la simulación">
+          <div class="scrub-meta"><span id="scrubPct">0 %</span><span id="scrubDur">—</span></div>
+        </div>
+        <div class="seg" role="group" aria-label="Velocidad de la simulación">
+          <button type="button" data-mode="lenta" aria-pressed="false">Lenta</button>
+          <button type="button" data-mode="normal" aria-pressed="true">Normal</button>
+          <button type="button" data-mode="rapida" aria-pressed="false">Rápida</button>
+        </div>
+      </div>
+      <div class="telemetry">
+        <div><span class="lbl">Hora simulada</span><span class="t-val" id="tClock">—</span><span class="t-sub" id="tDay">—</span></div>
+        <div><span class="lbl">Recorrido</span><span class="t-val" id="tKm">—</span><span class="t-sub" id="tKmLeft">—</span></div>
+        <div><span class="lbl">Velocidad</span><span class="t-val" id="tSpeed">—</span><span class="t-sub" id="tSpeedSub">—</span></div>
+        <div><span class="lbl">Llegada estimada</span><span class="t-val" id="tEta">—</span><span class="t-sub" id="tEtaSub">—</span></div>
+      </div>
+    </section>
+
+    <div class="split">
+      <section class="card box" aria-labelledby="quoteH">
+        <div class="box-h">
+          <h2 id="quoteH">Cotización</h2>
+          <button type="button" class="btn-ghost" id="copyBtn">Copiar resumen</button>
+        </div>
+        <div>
+          <div class="total" id="qTotal">—</div>
+          <div class="total-sub" id="qTotalSub">—</div>
+        </div>
+        <div class="stats">
+          <div><span class="v" id="sViajes">—</span><span class="k">viajes</span></div>
+          <div><span class="v" id="sUso">—</span><span class="k">aprovechamiento</span></div>
+          <div><span class="v" id="sTiempo">—</span><span class="k">por viaje</span></div>
+        </div>
+        <dl class="kv" id="qRows"></dl>
+        <ul class="notes" id="notes"></ul>
+      </section>
+
+      <section class="card box" aria-labelledby="logH">
+        <div class="box-h"><h2 id="logH">Bitácora del viaje</h2><span class="hint" id="logHint">Horario programado</span></div>
+        <ol class="events" id="events"></ol>
+      </section>
+    </div>
+
+    <section class="card box" aria-labelledby="histH">
+      <div class="box-h"><h2 id="histH">Fletes generados</h2><span class="hint" id="histCount"></span></div>
+      <div class="table-wrap" id="histWrap"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ---------- Catálogos ---------- */
+  const VEHICLES = [
+    { id: 'pickup',  name: 'Camioneta pick-up', cap: 1.5, vel: 80, tarifa: 9,  rend: 8.5, len: 0.75 },
+    { id: 'ligero',  name: 'Camión ligero',     cap: 3.5, vel: 75, tarifa: 13, rend: 6.5, len: 0.95 },
+    { id: 'mediano', name: 'Camión mediano',    cap: 8,   vel: 70, tarifa: 17, rend: 4.8, len: 1.2 },
+    { id: 'pesado',  name: 'Camión pesado',     cap: 15,  vel: 65, tarifa: 21, rend: 3.6, len: 1.45 },
+    { id: 'trailer', name: 'Tractocamión',      cap: 30,  vel: 62, tarifa: 27, rend: 2.7, len: 1.95 },
+    { id: 'refri',   name: 'Refrigerado',       cap: 22,  vel: 62, tarifa: 34, rend: 2.4, len: 1.8, refr: true }
+  ];
+  const PRODUCTS = [
+    { id: 'maiz', name: 'Maíz en grano' },
+    { id: 'trigo', name: 'Trigo' },
+    { id: 'sorgo', name: 'Sorgo' },
+    { id: 'soya', name: 'Soya' },
+    { id: 'frijol', name: 'Frijol' },
+    { id: 'cafe', name: 'Café verde' },
+    { id: 'cana', name: 'Caña de azúcar' },
+    { id: 'aguacate', name: 'Aguacate', per: true },
+    { id: 'tomate', name: 'Tomate', per: true },
+    { id: 'berries', name: 'Frutos rojos', per: true },
+    { id: 'leche', name: 'Leche cruda', per: true },
+    { id: 'fertilizante', name: 'Fertilizante' },
+    { id: 'forraje', name: 'Forraje en pacas' }
+  ];
+  const LOCALE = { MXN: 'es-MX', USD: 'es-US', COP: 'es-CO', PEN: 'es-PE', CLP: 'es-CL', ARS: 'es-AR', GTQ: 'es-GT', EUR: 'es-ES' };
+  const REAL_SECONDS = { lenta: 45, normal: 24, rapida: 10 };   // duración de la animación completa
+  const CONVOY_GAP_H = 1 / 6;                                   // 10 min entre unidades del convoy
+  const MAX_CONVOY = 6;
+  const MAX_STOPS = 6;
+  const STORE_KEY = 'fleteagro.historial.v1';
+  const W = 1000, H = 560;                                      // mundo lógico del mapa
+
+  const $ = (s) => document.querySelector(s);
+  const form = $('#form');
+
+  /* ---------- Utilidades ---------- */
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function hashStr(s) {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function fmtNum(v, d = 0) {
+    return new Intl.NumberFormat('es-MX', { minimumFractionDigits: d, maximumFractionDigits: d }).format(v);
+  }
+  function fmtMoney(v, cur) {
+    try {
+      return new Intl.NumberFormat(LOCALE[cur] || 'es', { style: 'currency', currency: cur, maximumFractionDigits: cur === 'CLP' ? 0 : 2, minimumFractionDigits: cur === 'CLP' ? 0 : 2 }).format(v);
+    } catch (e) { return cur + ' ' + v.toFixed(2); }
+  }
+  function fmtDur(h) {
+    const m = Math.round(h * 60);
+    const hh = Math.floor(m / 60), mm = m % 60;
+    return hh ? `${hh} h ${String(mm).padStart(2, '0')} min` : `${mm} min`;
+  }
+  const fmtTime = (d) => d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const fmtDay = (d) => d.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' });
+  const addHours = (d, h) => new Date(d.getTime() + h * 3600000);
+  function toLocalInput(d) {
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  function parseSalida(s) {
+    const d = s ? new Date(s) : null;
+    return d && !isNaN(d) ? d : new Date();
+  }
+  function hexAlpha(hex, a) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+    if (!m) return hex;
+    const n = parseInt(m[1], 16);
+    return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+  function truncate(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+
+  /* ---------- Construcción del formulario ---------- */
+  function vehIcon(v) {
+    const body = Math.round(26 + v.len * 16), cab = 12, L = body + cab + 3;
+    const wheels = v.len > 1.5 ? [6, 13, body - 10, body - 3, L - 6] : v.len > 1 ? [7, body - 5, L - 6] : [8, L - 7];
+    return `<svg viewBox="0 0 ${L + 1} 22" aria-hidden="true">
+      <rect class="vi-body" x="1" y="3" width="${body}" height="12" rx="2"/>
+      ${v.refr ? `<rect class="vi-cold" x="4" y="7" width="${body - 6}" height="2" rx="1"/>` : ''}
+      <path class="vi-cab" d="M${body + 2} 6h${cab - 4}l4 5v4h-${cab}z"/>
+      <path class="vi-win" d="M${body + cab - 3} 7.4l2.6 3.4h-2.6z"/>
+      ${wheels.map((x) => `<circle class="vi-wheel" cx="${x}" cy="17.5" r="2.8"/>`).join('')}
+    </svg>`;
+  }
+  $('#vehicles').innerHTML = VEHICLES.map((v) => `
+    <label class="veh">
+      <input type="radio" name="veh" value="${v.id}" id="veh-${v.id}">
+      <span class="veh-box">${vehIcon(v)}
+        <span class="veh-name">${v.name}</span>
+        <span class="veh-cap">hasta ${fmtNum(v.cap, v.cap % 1 ? 1 : 0)} t${v.refr ? ' · frío' : ''}</span>
+      </span>
+    </label>`).join('');
+  $('#producto').innerHTML = PRODUCTS.map((p) => `<option value="${p.id}">${p.name}${p.per ? ' (perecedero)' : ''}</option>`).join('');
+
+  function applyPreset(id) {
+    const v = VEHICLES.find((x) => x.id === id);
+    if (!v) return;
+    $('#cap').value = v.cap; $('#vel').value = v.vel; $('#tarifa').value = v.tarifa; $('#rend').value = v.rend;
+  }
+
+  const SAMPLE = (() => {
+    const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(6, 0, 0, 0);
+    return {
+      vid: 'trailer', cap: 30, vel: 62, tarifa: 27, rend: 2.7,
+      producto: 'maiz', cantidad: 72, presentacion: 'Granel',
+      origen: 'Finca El Mirador', destino: 'Centro de acopio Valle Alto', distancia: 186,
+      paradas: 'Báscula pública, Caseta El Llano', minParada: 20, salida: toLocalInput(d),
+      moneda: 'MXN', combustible: 25.5, maniobras: 1200, peajes: 640, iva: 16, retorno: false
+    };
+  })();
+
+  function fillForm(p) {
+    const r = document.getElementById('veh-' + p.vid);
+    if (r) r.checked = true;
+    ['cap', 'vel', 'tarifa', 'rend', 'producto', 'cantidad', 'presentacion', 'origen', 'destino', 'distancia', 'minParada', 'salida', 'moneda', 'combustible', 'maniobras', 'peajes', 'iva']
+      .forEach((k) => { const el = document.getElementById(k); if (el && p[k] !== undefined) el.value = p[k]; });
+    $('#paradas').value = Array.isArray(p.paradas) ? p.paradas.join(', ') : (p.paradas || '');
+    $('#retorno').checked = !!p.retorno;
+  }
+
+  function readParams() {
+    const n = (id) => { const v = parseFloat(document.getElementById(id).value); return Number.isFinite(v) ? v : 0; };
+    const checked = form.querySelector('input[name="veh"]:checked');
+    return {
+      vid: checked ? checked.value : 'trailer',
+      cap: n('cap'), vel: n('vel'), tarifa: n('tarifa'), rend: n('rend'),
+      producto: $('#producto').value, cantidad: n('cantidad'), presentacion: $('#presentacion').value,
+      origen: $('#origen').value.trim(), destino: $('#destino').value.trim(), distancia: n('distancia'),
+      paradas: $('#paradas').value.split(',').map((s) => s.trim()).filter(Boolean).slice(0, MAX_STOPS),
+      minParada: n('minParada'), salida: $('#salida').value,
+      moneda: $('#moneda').value, combustible: n('combustible'), maniobras: n('maniobras'), peajes: n('peajes'),
+      iva: n('iva'), retorno: $('#retorno').checked
+    };
+  }
+
+  function validate(p) {
+    const e = [];
+    if (!p.origen) e.push('Escribe el punto de origen.');
+    if (!p.destino) e.push('Escribe el destino.');
+    if (p.origen && p.destino && p.origen.toLowerCase() === p.destino.toLowerCase()) e.push('El origen y el destino deben ser distintos.');
+    if (p.distancia <= 0) e.push('Indica la distancia en km (mayor que 0).');
+    if (p.cantidad <= 0) e.push('Indica la cantidad de carga en toneladas.');
+    if (p.cap <= 0) e.push('La capacidad del vehículo debe ser mayor que 0.');
+    if (p.vel <= 0) e.push('La velocidad promedio debe ser mayor que 0.');
+    return e;
+  }
+
+  /* ---------- Cotización ---------- */
+  function quote(p) {
+    const viajes = Math.max(1, Math.ceil(p.cantidad / p.cap - 1e-9));
+    const uso = p.cantidad / (viajes * p.cap);
+    const vueltas = p.retorno ? 2 : 1;
+    const servicio = p.distancia * p.tarifa * (p.retorno ? 1.5 : 1) * viajes;
+    const litros = p.rend > 0 ? (p.distancia * vueltas / p.rend) * viajes : 0;
+    const diesel = litros * p.combustible;
+    const maniobras = p.maniobras * viajes;
+    const peajes = p.peajes * viajes * vueltas;
+    const subtotal = servicio + diesel + maniobras + peajes;
+    const impuesto = subtotal * p.iva / 100;
+    const total = subtotal + impuesto;
+    const hManejo = p.distancia / p.vel;
+    const hParadas = p.paradas.length * p.minParada / 60;
+    return {
+      viajes, uso, servicio, litros, diesel, maniobras, peajes, subtotal, impuesto, total,
+      hManejo, hParadas, hViaje: hManejo + hParadas,
+      porTon: total / p.cantidad, porKm: total / (p.distancia * viajes)
+    };
+  }
+
+  /* ---------- Ruta y línea de tiempo ---------- */
+  let route = null;
+  function buildRoute(key) {
+    const seed = hashStr(key);
+    const r = mulberry32(seed);
+    const o = { x: 95, y: 120 + r() * 320 }, d = { x: 905, y: 120 + r() * 320 };
+    const ctrl = [o];
+    const n = 4 + Math.floor(r() * 3);
+    for (let i = 1; i <= n; i++) {
+      const t = i / (n + 1);
+      ctrl.push({ x: lerp(o.x, d.x, t) + (r() - 0.5) * 60, y: clamp(lerp(o.y, d.y, t) + (r() - 0.5) * 250, 70, 490) });
+    }
+    ctrl.push(d);
+    const pts = [];
+    for (let i = 0; i < ctrl.length - 1; i++) {
+      const p0 = ctrl[Math.max(i - 1, 0)], p1 = ctrl[i], p2 = ctrl[i + 1], p3 = ctrl[Math.min(i + 2, ctrl.length - 1)];
+      for (let s = 0; s < 24; s++) {
+        const t = s / 24, t2 = t * t, t3 = t2 * t;
+        const f = (a, b, c, e) => 0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - e) * t2 + (-a + 3 * b - 3 * c + e) * t3);
+        pts.push({ x: f(p0.x, p1.x, p2.x, p3.x), y: f(p0.y, p1.y, p2.y, p3.y) });
+      }
+    }
+    pts.push(d);
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+    route = { seed, pts, cum, len: cum[cum.length - 1], scr: [] };
+    projectRoute();
+  }
+  function pointAt(f) {
+    const target = clamp(f, 0, 1) * route.len;
+    let lo = 0, hi = route.cum.length - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (route.cum[mid] <= target) lo = mid; else hi = mid; }
+    const a = route.pts[lo], b = route.pts[hi];
+    const seg = route.cum[hi] - route.cum[lo] || 1;
+    const t = (target - route.cum[lo]) / seg;
+    return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), ang: Math.atan2(b.y - a.y, b.x - a.x), idx: lo };
+  }
+
+  function buildTimeline(p) {
+    const segs = [], events = [];
+    const k = p.paradas.length;
+    const stopFr = p.paradas.map((_, i) => (i + 1) / (k + 1));
+    const stopH = p.minParada / 60;
+    let t = 0, prev = 0;
+    events.push({ t: 0, txt: `Salida de ${p.origen}`, kind: 'start' });
+    stopFr.forEach((f, i) => {
+      const dur = (f - prev) * p.distancia / p.vel;
+      segs.push({ type: 'drive', t0: t, t1: t + dur, f0: prev, f1: f });
+      t += dur;
+      events.push({ t, txt: `Llega a ${p.paradas[i]} · km ${fmtNum(f * p.distancia)}`, kind: 'stop' });
+      if (stopH > 0) {
+        segs.push({ type: 'stop', t0: t, t1: t + stopH, f0: f, f1: f, name: p.paradas[i] });
+        t += stopH;
+        events.push({ t, txt: `Reanuda tras ${fmtNum(p.minParada)} min en ${p.paradas[i]}`, kind: 'resume' });
+      }
+      prev = f;
+    });
+    const dur = (1 - prev) * p.distancia / p.vel;
+    segs.push({ type: 'drive', t0: t, t1: t + dur, f0: prev, f1: 1 });
+    t += dur;
+    // Hitos de avance que no coincidan con paradas
+    [0.25, 0.5, 0.75].forEach((q) => {
+      if (stopFr.some((f) => Math.abs(f - q) < 0.06)) return;
+      const s = segs.find((g) => g.type === 'drive' && q >= g.f0 && q <= g.f1);
+      if (!s) return;
+      const tq = lerp(s.t0, s.t1, (q - s.f0) / ((s.f1 - s.f0) || 1));
+      events.push({ t: tq, txt: `${fmtNum(q * 100)} % del recorrido · km ${fmtNum(q * p.distancia)}`, kind: 'mark' });
+    });
+    events.push({ t, txt: `Entrega en ${p.destino}`, kind: 'end' });
+    events.sort((a, b) => a.t - b.t);
+    return { segs, events, total: t };
+  }
+  function stateAt(tl, t) {
+    if (t <= 0) return { f: 0, s: 'ready' };
+    for (const g of tl.segs) {
+      if (t <= g.t1) {
+        if (g.type === 'stop') return { f: g.f0, s: 'stop', name: g.name };
+        const u = (t - g.t0) / ((g.t1 - g.t0) || 1);
+        return { f: lerp(g.f0, g.f1, u), s: 'drive' };
+      }
+    }
+    return { f: 1, s: 'done' };
+  }
+
+  /* ---------- Mapa (canvas) ---------- */
+  const mapEl = $('#map');
+  const canvas = $('#canvas');
+  const ctx = canvas.getContext('2d');
+  const terrain = document.createElement('canvas');
+  const tctx = terrain.getContext('2d');
+  let cw = 0, ch = 0, dpr = 1, scale = 1, ox = 0, oy = 0;
+  let terrainDirty = true, dirty = true;
+  let T = {};
+
+  function readTokens() {
+    const cs = getComputedStyle(document.documentElement);
+    const g = (n) => cs.getPropertyValue(n).trim();
+    T = {
+      bg: g('--map-bg'), p1: g('--map-parcel-1'), p2: g('--map-parcel-2'), p3: g('--map-parcel-3'),
+      rows: g('--map-rows'), water: g('--map-water'), road: g('--map-road'), roadEdge: g('--map-road-edge'),
+      todo: g('--route-todo'), done: g('--route-done'), body: g('--truck-body'), cab: g('--truck-cab'),
+      labelBg: g('--label-bg'), labelInk: g('--label-ink'), labelMuted: g('--label-muted'), labelLine: g('--label-line'),
+      sky: g('--sky'), warn: g('--warn'), ok: g('--ok'), accent: g('--accent')
+    };
+  }
+  const toScreen = (p) => ({ x: ox + p.x * scale, y: oy + p.y * scale });
+  function projectRoute() { if (route) route.scr = route.pts.map(toScreen); }
+
+  function resize() {
+    const rect = mapEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    cw = rect.width; ch = rect.height;
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = terrain.width = Math.round(cw * dpr);
+    canvas.height = terrain.height = Math.round(ch * dpr);
+    scale = Math.min(cw / W, ch / H) * 0.96;
+    ox = (cw - W * scale) / 2; oy = (ch - H * scale) / 2;
+    projectRoute();
+    terrainDirty = dirty = true;
+  }
+
+  function rr(g, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    g.beginPath();
+    g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+  }
+
+  function drawTerrain() {
+    const g = tctx;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = T.bg; g.fillRect(0, 0, terrain.width, terrain.height);
+    if (!route) return;
+    g.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
+    const x0 = -ox / scale - 60, x1 = (cw - ox) / scale + 60, y0 = -oy / scale - 60, y1 = (ch - oy) / scale + 60;
+    const CW = 58, CH = 46;
+    const fills = [T.p1, T.p2, T.p3, T.p1, T.p3];
+    const rowColor = hexAlpha(T.rows, 0.16);
+    g.lineWidth = 1;
+    for (let iy = Math.floor(y0 / CH); iy * CH < y1; iy++) {
+      for (let ix = Math.floor(x0 / CW); ix * CW < x1; ix++) {
+        const r = mulberry32(route.seed ^ Math.imul(ix, 73856093) ^ Math.imul(iy, 19349663));
+        if (r() < 0.1) continue;
+        const w = CW - 5 - r() * 12, h = CH - 5 - r() * 10;
+        const px = ix * CW + 2 + r() * (CW - 4 - w), py = iy * CH + 2 + r() * (CH - 4 - h);
+        g.fillStyle = fills[Math.floor(r() * fills.length)];
+        rr(g, px, py, w, h, 3); g.fill();
+        if (r() < 0.65) {
+          g.save(); rr(g, px, py, w, h, 3); g.clip();
+          g.strokeStyle = rowColor; g.beginPath();
+          if (r() < 0.5) { for (let i = px + 3; i < px + w; i += 4) { g.moveTo(i, py); g.lineTo(i, py + h); } }
+          else { for (let j = py + 3; j < py + h; j += 4) { g.moveTo(px, j); g.lineTo(px + w, j); } }
+          g.stroke(); g.restore();
+        }
+      }
+    }
+    const r = mulberry32(route.seed ^ 0x5bd1e995);
+    // Río
+    const rx = 280 + r() * 440, ph = r() * 6;
+    g.beginPath();
+    for (let y = y0; y <= y1; y += 8) {
+      const x = rx + Math.sin(y / 85 + ph) * 46 + Math.sin(y / 33 + ph * 2) * 10;
+      if (y === y0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.strokeStyle = T.water; g.lineWidth = 9; g.lineCap = 'round'; g.lineJoin = 'round'; g.stroke();
+    g.strokeStyle = hexAlpha(T.sky, 0.55); g.lineWidth = 2.5; g.stroke();
+    // Caminos secundarios
+    g.strokeStyle = T.road; g.lineWidth = 3;
+    for (let k = 0; k < 3; k++) {
+      const ya = 40 + r() * 480, yb = 40 + r() * 480;
+      g.beginPath(); g.moveTo(x0, ya);
+      g.bezierCurveTo(lerp(x0, x1, 0.33), ya + (r() - 0.5) * 200, lerp(x0, x1, 0.66), yb + (r() - 0.5) * 200, x1, yb);
+      g.stroke();
+    }
+    for (let k = 0; k < 2; k++) {
+      const xa = 160 + r() * 680;
+      g.beginPath(); g.moveTo(xa, y0);
+      g.bezierCurveTo(xa + (r() - 0.5) * 160, lerp(y0, y1, 0.4), xa + (r() - 0.5) * 160, lerp(y0, y1, 0.6), xa + (r() - 0.5) * 120, y1);
+      g.stroke();
+    }
+  }
+
+  function strokePoly(pts, w, color, dash) {
+    ctx.beginPath();
+    pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+    ctx.lineWidth = w; ctx.strokeStyle = color; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.setLineDash(dash || []); ctx.stroke(); ctx.setLineDash([]);
+  }
+  function partialPoly(f) {
+    const p = pointAt(f);
+    const out = route.scr.slice(0, p.idx + 1);
+    out.push(toScreen(p));
+    return out;
+  }
+
+  function label(x, y, title, sub, place) {
+    const fTitle = '600 12.5px ' + getFont('--font-body');
+    const fSub = '500 10.5px ' + getFont('--font-body');
+    ctx.font = fTitle; const w1 = ctx.measureText(title).width;
+    ctx.font = fSub; const w2 = sub ? ctx.measureText(sub).width : 0;
+    const w = Math.max(w1, w2) + 18, h = sub ? 38 : 24;
+    let bx = clamp(x - w / 2, 6, cw - w - 6);
+    let by = place === 'below' ? y + 14 : y - h - 14;
+    if (by < 6) by = y + 14;
+    if (by + h > ch - 6) by = y - h - 14;
+    ctx.fillStyle = T.labelBg; ctx.strokeStyle = T.labelLine; ctx.lineWidth = 1;
+    rr(ctx, bx + 0.5, by + 0.5, w, h, 7); ctx.fill(); ctx.stroke();
+    ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+    if (sub) {
+      ctx.font = fSub; ctx.fillStyle = T.labelMuted; ctx.fillText(sub.toUpperCase(), bx + 9, by + 15);
+      ctx.font = fTitle; ctx.fillStyle = T.labelInk; ctx.fillText(title, bx + 9, by + 30);
+    } else {
+      ctx.font = fTitle; ctx.fillStyle = T.labelInk; ctx.fillText(title, bx + 9, by + 16.5);
+    }
+  }
+  const fontCache = {};
+  function getFont(tok) {
+    if (!fontCache[tok]) fontCache[tok] = getComputedStyle(document.documentElement).getPropertyValue(tok).trim() || 'sans-serif';
+    return fontCache[tok];
+  }
+
+  function drawTruck(x, y, ang, v, lead, k) {
+    const L = 20 * v.len * k, Wd = 8.5 * k;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+    if (lead) {
+      ctx.fillStyle = hexAlpha(T.accent, 0.22);
+      ctx.beginPath(); ctx.arc(0, 0, Math.max(L, 14) * 0.85, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    rr(ctx, -L / 2 + 1.5, -Wd / 2 + 2, L, Wd, 2.5); ctx.fill();
+    const trailer = L * 0.72;
+    ctx.fillStyle = T.body; rr(ctx, -L / 2, -Wd / 2, trailer, Wd, 2); ctx.fill();
+    if (v.refr) { ctx.fillStyle = T.sky; ctx.fillRect(-L / 2 + 2, -1, trailer - 4, 2); }
+    ctx.fillStyle = T.cab; rr(ctx, -L / 2 + trailer + 1.2, -Wd / 2 + 0.6, L - trailer - 1.2, Wd - 1.2, 2.5); ctx.fill();
+    ctx.fillStyle = T.sky; ctx.fillRect(L / 2 - 2.6 * k, -Wd / 2 + 1.8, 1.6 * k, Wd - 3.6);
+    ctx.restore();
+  }
+
+  function niceStep(dist) {
+    const c = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000];
+    return c.find((s) => dist / s <= 6) || 5000;
+  }
+
+  function draw() {
+    if (!cw || !route || !TL) return;
+    if (terrainDirty) { drawTerrain(); terrainDirty = false; }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(terrain, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const S = route.scr;
+    const k = clamp(scale * 1.15, 0.7, 1.15);
+
+    // Carretera
+    strokePoly(S, 12 * k, T.roadEdge);
+    strokePoly(S, 8 * k, T.road);
+    strokePoly(S, 2, T.todo, [5, 6]);
+    const lead = stateAt(TL, sim.t);
+    if (lead.f > 0) strokePoly(partialPoly(lead.f), 5 * k, T.done);
+
+    // Kilómetros
+    const step = niceStep(P.distancia);
+    ctx.font = '500 10px ' + getFont('--font-mono');
+    for (let km = step; km < P.distancia - step * 0.35; km += step) {
+      const p = pointAt(km / P.distancia), s = toScreen(p);
+      ctx.fillStyle = T.labelBg; ctx.strokeStyle = T.todo; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(s.x, s.y, 3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      const nx = -Math.sin(p.ang), ny = Math.cos(p.ang);
+      ctx.fillStyle = T.labelMuted; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(`km ${km}`, s.x + nx * 16, s.y + ny * 16);
+    }
+
+    // Paradas
+    const kStops = P.paradas.length;
+    P.paradas.forEach((name, i) => {
+      const f = (i + 1) / (kStops + 1);
+      const s = toScreen(pointAt(f));
+      const reached = lead.f >= f - 1e-6 && sim.t > 0;
+      ctx.fillStyle = reached ? T.warn : T.labelBg; ctx.strokeStyle = T.warn; ctx.lineWidth = 2;
+      rr(ctx, s.x - 5, s.y - 5, 10, 10, 2.5); ctx.fill(); ctx.stroke();
+      label(s.x, s.y, truncate(name, 24), null, i % 2 ? 'above' : 'below');
+    });
+
+    // Origen y destino
+    const O = S[0], D = S[S.length - 1];
+    ctx.fillStyle = T.labelBg; ctx.strokeStyle = T.done; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(O.x, O.y, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    const delivered = lead.s === 'done';
+    ctx.fillStyle = delivered ? T.ok : T.done;
+    ctx.strokeStyle = T.labelBg; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(D.x, D.y, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    label(O.x, O.y, truncate(P.origen, 28), 'Origen', 'above');
+    label(D.x, D.y, truncate(P.destino, 28), delivered ? 'Destino · entregado' : 'Destino', 'above');
+
+    // Vehículos (convoy)
+    const v = VEHICLES.find((x) => x.id === P.vid) || VEHICLES[4];
+    for (let i = sim.n - 1; i >= 0; i--) {
+      const ti = sim.t - i * CONVOY_GAP_H;
+      if (i > 0 && ti <= 0) continue;
+      const st = stateAt(TL, ti);
+      const p = pointAt(Math.max(st.f, 0.0001));
+      const s = toScreen(p);
+      drawTruck(s.x, s.y, p.ang, v, i === 0, k);
+    }
+  }
+
+  /* ---------- Simulación ---------- */
+  let P = null, Q = null, TL = null, routeKey = '';
+  const sim = { t: 0, end: 1, n: 1, playing: false, last: 0, mode: 'normal' };
+  let shownEvents = -1;
+
+  function setupSim() {
+    sim.n = Math.min(Q.viajes, MAX_CONVOY);
+    sim.end = TL.total + (sim.n - 1) * CONVOY_GAP_H;
+    sim.t = 0; sim.playing = false;
+    shownEvents = -1;
+    renderEvents();
+    updatePlayBtn();
+    dirty = true;
+  }
+  function play() {
+    if (!TL) return;
+    if (sim.t >= sim.end) { sim.t = 0; shownEvents = -1; }
+    sim.playing = true; sim.last = performance.now();
+    updatePlayBtn();
+  }
+  function pause() { sim.playing = false; updatePlayBtn(); }
+  function updatePlayBtn() {
+    const btn = $('#playBtn');
+    btn.setAttribute('aria-label', sim.playing ? 'Pausar simulación' : (sim.t >= sim.end && sim.t > 0 ? 'Repetir simulación' : 'Iniciar simulación'));
+    $('#playIcon').innerHTML = sim.playing ? '<path d="M3.5 2.5h3v11h-3zM9.5 2.5h3v11h-3z"/>' : '<path d="M4 2.5v11l9-5.5z"/>';
+  }
+
+  function loop(ts) {
+    if (sim.playing) {
+      const dt = Math.min(0.1, (ts - sim.last) / 1000);
+      sim.last = ts;
+      sim.t = Math.min(sim.end, sim.t + dt * sim.end / REAL_SECONDS[sim.mode]);
+      if (sim.t >= sim.end) { sim.playing = false; updatePlayBtn(); }
+      dirty = true;
+    }
+    if (dirty) { draw(); updateTelemetry(); dirty = false; }
+    requestAnimationFrame(loop);
+  }
+
+  function updateTelemetry() {
+    if (!TL) return;
+    const salida = parseSalida(P.salida);
+    const lead = stateAt(TL, sim.t);
+    const now = addHours(salida, sim.t);
+    $('#tClock').textContent = fmtTime(now);
+    $('#tDay').textContent = fmtDay(now) + ' · +' + fmtDur(sim.t);
+    const km = lead.f * P.distancia;
+    $('#tKm').textContent = `${fmtNum(km)} / ${fmtNum(P.distancia)} km`;
+    $('#tKmLeft').textContent = lead.s === 'done' ? 'Ruta completada' : `Faltan ${fmtNum(P.distancia - km)} km`;
+    let speed = 0;
+    if (lead.s === 'drive') speed = Math.round(P.vel + Math.sin(sim.t * 9) * 4 + Math.sin(sim.t * 23) * 2);
+    $('#tSpeed').textContent = `${speed} km/h`;
+    $('#tSpeedSub').textContent = lead.s === 'stop' ? `Detenido en ${lead.name}` : lead.s === 'drive' ? `Promedio ${fmtNum(P.vel)} km/h` : lead.s === 'done' ? 'Motor apagado' : 'En patio de carga';
+    const eta = addHours(salida, TL.total);
+    $('#tEta').textContent = fmtTime(eta);
+    $('#tEtaSub').textContent = sim.n > 1 ? `${fmtDay(eta)} · última unidad ${fmtTime(addHours(salida, sim.end))}` : fmtDay(eta);
+
+    // Estado
+    const pill = $('#statusPill');
+    let s = lead.s, txt = 'Listo para salir';
+    if (s === 'drive') txt = 'En ruta';
+    if (s === 'stop') txt = `En parada · ${truncate(lead.name, 22)}`;
+    if (s === 'done') {
+      const arrived = Array.from({ length: sim.n }, (_, i) => stateAt(TL, sim.t - i * CONVOY_GAP_H).s === 'done').filter(Boolean).length;
+      if (arrived < sim.n) { s = 'drive'; txt = `Entregando · ${arrived} de ${sim.n} unidades`; }
+      else txt = 'Entregado';
+    }
+    pill.dataset.s = s; pill.textContent = txt;
+
+    const frac = sim.end ? sim.t / sim.end : 0;
+    $('#scrub').value = Math.round(frac * 1000);
+    $('#scrubPct').textContent = `${fmtNum(frac * 100)} %`;
+
+    const count = TL.events.filter((e) => e.t <= sim.t + 1e-9 && sim.t > 0).length;
+    if (count !== shownEvents) { shownEvents = count; markEvents(count); }
+  }
+
+  function renderEvents() {
+    const salida = parseSalida(P.salida);
+    const list = TL.events.slice();
+    if (sim.n > 1) list.push({ t: sim.end, txt: `Llega la unidad ${sim.n} de ${sim.n} del convoy`, kind: 'end' });
+    TL.shown = list;
+    $('#events').innerHTML = list.map((e) => `
+      <li class="${e.kind}"><span class="ev-time">${fmtTime(addHours(salida, e.t))}</span><span class="ev-dot"></span><span class="ev-txt">${esc(e.txt)}</span></li>`).join('');
+  }
+  function markEvents() {
+    const items = $('#events').children;
+    let any = false;
+    TL.shown.forEach((e, i) => {
+      const done = sim.t > 0 && e.t <= sim.t + 1e-9;
+      if (done) any = true;
+      items[i] && items[i].classList.toggle('done', done);
+    });
+    $('#logHint').textContent = any ? 'Registro en tiempo simulado' : 'Horario programado';
+  }
+
+  /* ---------- Render de cotización ---------- */
+  function renderQuote() {
+    const c = P.moneda, m = (v) => fmtMoney(v, c);
+    const v = VEHICLES.find((x) => x.id === P.vid);
+    $('#qTotal').textContent = m(Q.total);
+    $('#qTotalSub').textContent = `${m(Q.porTon)} por tonelada · ${m(Q.porKm)} por km`;
+    $('#sViajes').textContent = fmtNum(Q.viajes);
+    $('#sUso').textContent = `${fmtNum(Q.uso * 100)} %`;
+    $('#sTiempo').textContent = fmtDur(Q.hViaje);
+    const kmTxt = `${fmtNum(P.distancia)} km × ${fmtMoney(P.tarifa, c)}${P.retorno ? ' × 1.5' : ''} × ${Q.viajes}`;
+    $('#qRows').innerHTML = `
+      <dt>Servicio de flete<br><small>${esc(kmTxt)}</small></dt><dd>${m(Q.servicio)}</dd>
+      <dt>Diésel<br><small>${fmtNum(Q.litros)} L a ${fmtMoney(P.combustible, c)}</small></dt><dd>${m(Q.diesel)}</dd>
+      <dt>Maniobras de carga y descarga</dt><dd>${m(Q.maniobras)}</dd>
+      <dt>Peajes${P.retorno ? ' (ida y vuelta)' : ''}</dt><dd>${m(Q.peajes)}</dd>
+      <div class="sep"></div>
+      <dt class="strong">Subtotal</dt><dd class="strong">${m(Q.subtotal)}</dd>
+      <dt>Impuesto ${fmtNum(P.iva, P.iva % 1 ? 1 : 0)} %</dt><dd>${m(Q.impuesto)}</dd>
+      <dt class="strong">Total</dt><dd class="strong">${m(Q.total)}</dd>`;
+
+    const notes = [];
+    const prod = PRODUCTS.find((x) => x.id === P.producto);
+    if (prod && prod.per && !(v && v.refr)) notes.push({ w: true, t: `${prod.name} es perecedero. Se recomienda una unidad refrigerada.` });
+    if (Q.viajes > 1) notes.push({ t: `${fmtNum(P.cantidad, P.cantidad % 1 ? 1 : 0)} t superan la capacidad de ${fmtNum(P.cap, P.cap % 1 ? 1 : 0)} t: se necesitan ${Q.viajes} viajes.` });
+    if (Q.viajes > MAX_CONVOY) notes.push({ t: `La simulación muestra ${MAX_CONVOY} unidades en convoy; la cotización incluye los ${Q.viajes} viajes.` });
+    if (Q.uso < 0.5) notes.push({ w: true, t: `Aprovechamiento bajo (${fmtNum(Q.uso * 100)} %). Un vehículo más pequeño podría abaratar el flete.` });
+    if (Q.hManejo > 8) notes.push({ w: true, t: `Son ${fmtDur(Q.hManejo)} de manejo. Considera paradas de descanso para el operador.` });
+    $('#notes').innerHTML = notes.map((n) => `<li class="${n.w ? 'warn' : ''}">${esc(n.t)}</li>`).join('');
+
+    $('#routeTitle').innerHTML = `${esc(P.origen)}<span class="arrow" aria-hidden="true">→</span><span class="visually-hidden">a</span>${esc(P.destino)}`;
+    $('#simEyebrow').textContent = `${v ? v.name : ''} · ${fmtNum(P.cantidad, P.cantidad % 1 ? 1 : 0)} t de ${prod ? prod.name.toLowerCase() : ''} · ${fmtNum(P.distancia)} km`;
+    $('#scrubDur').textContent = `${fmtDur(Q.hViaje)} de viaje`;
+    const note = $('#convoyNote');
+    note.hidden = sim.n <= 1 && Q.viajes <= 1;
+    note.textContent = Q.viajes > 1 ? `Convoy de ${Math.min(Q.viajes, MAX_CONVOY)} unidades · ${Q.viajes} viajes en total` : '';
+  }
+
+  function summaryText(folio) {
+    const v = VEHICLES.find((x) => x.id === P.vid);
+    const prod = PRODUCTS.find((x) => x.id === P.producto);
+    const salida = parseSalida(P.salida);
+    return [
+      `Flete agrícola${folio ? ' ' + folio : ''}`,
+      `Ruta: ${P.origen} → ${P.destino} (${fmtNum(P.distancia)} km)`,
+      P.paradas.length ? `Paradas: ${P.paradas.join(', ')}` : null,
+      `Carga: ${fmtNum(P.cantidad, P.cantidad % 1 ? 1 : 0)} t de ${prod ? prod.name : ''} (${P.presentacion})`,
+      `Vehículo: ${v ? v.name : ''} · ${Q.viajes} viaje(s) · aprovechamiento ${fmtNum(Q.uso * 100)} %`,
+      `Salida: ${fmtDay(salida)} ${fmtTime(salida)} · Llegada estimada: ${fmtDay(addHours(salida, Q.hViaje))} ${fmtTime(addHours(salida, Q.hViaje))}`,
+      `Total: ${fmtMoney(Q.total, P.moneda)} (${fmtMoney(Q.porTon, P.moneda)} por tonelada)`
+    ].filter(Boolean).join('\n');
+  }
+
+  /* ---------- Historial ---------- */
+  let hist = [];
+  try { hist = JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch (e) { hist = []; }
+  if (!Array.isArray(hist)) hist = [];
+  function saveHist() { try { localStorage.setItem(STORE_KEY, JSON.stringify(hist.slice(0, 60))); } catch (e) { /* sin almacenamiento */ } }
+
+  function renderHist() {
+    $('#histCount').textContent = hist.length ? `${hist.length} ${hist.length === 1 ? 'flete' : 'fletes'}` : '';
+    if (!hist.length) {
+      $('#histWrap').innerHTML = '<p class="empty">Aún no has generado fletes. Completa el formulario y pulsa <strong>Generar flete y simular</strong>; aparecerán aquí para volver a simularlos.</p>';
+      return;
+    }
+    $('#histWrap').innerHTML = `<table>
+      <thead><tr><th>Folio</th><th>Ruta</th><th>Carga</th><th>Vehículo</th><th class="num">Total</th><th><span class="visually-hidden">Acciones</span></th></tr></thead>
+      <tbody>${hist.map((h, i) => {
+        const v = VEHICLES.find((x) => x.id === h.p.vid);
+        const prod = PRODUCTS.find((x) => x.id === h.p.producto);
+        const sal = parseSalida(h.p.salida);
+        return `<tr>
+          <td><span class="folio">${esc(h.folio)}</span><span class="sub">${esc(fmtDay(sal))} ${esc(fmtTime(sal))}</span></td>
+          <td>${esc(truncate(h.p.origen, 26))} → ${esc(truncate(h.p.destino, 26))}<span class="sub">${fmtNum(h.p.distancia)} km</span></td>
+          <td>${fmtNum(h.p.cantidad, h.p.cantidad % 1 ? 1 : 0)} t<span class="sub">${esc(prod ? prod.name : '')}</span></td>
+          <td>${esc(v ? v.name : '')}<span class="sub">${h.viajes} viaje(s)</span></td>
+          <td class="num">${esc(fmtMoney(h.total, h.p.moneda))}</td>
+          <td><div class="row-actions"><button type="button" class="btn-ghost" data-act="sim" data-i="${i}">Simular</button><button type="button" class="btn-ghost" data-act="del" data-i="${i}">Eliminar</button></div></td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+  }
+  $('#histWrap').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-act]');
+    if (!b) return;
+    const i = +b.dataset.i;
+    if (b.dataset.act === 'sim' && hist[i]) {
+      fillForm(hist[i].p);
+      refresh();
+      play();
+      $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else if (b.dataset.act === 'del') {
+      if (b.dataset.armed) { hist.splice(i, 1); saveHist(); renderHist(); }
+      else {
+        b.dataset.armed = '1'; b.textContent = 'Confirmar';
+        setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = 'Eliminar'; } }, 3000);
+      }
+    }
+  });
+
+  /* ---------- Flujo principal ---------- */
+  function refresh() {
+    const p = readParams();
+    const errs = validate(p);
+    $('#formMsg').textContent = errs.join(' ');
+    if (errs.length) return false;
+    P = p; Q = quote(P);
+    const key = P.origen.toLowerCase() + '→' + P.destino.toLowerCase();
+    if (key !== routeKey) { routeKey = key; buildRoute(key); terrainDirty = true; }
+    TL = buildTimeline(P);
+    setupSim();
+    renderQuote();
+    dirty = true;
+    return true;
+  }
+
+  let debounce = 0;
+  form.addEventListener('input', (e) => {
+    $('#sampleNote').hidden = true;
+    clearTimeout(debounce);
+    debounce = setTimeout(refresh, 180);
+  });
+  form.addEventListener('change', (e) => {
+    if (e.target.name === 'veh') { applyPreset(e.target.value); clearTimeout(debounce); refresh(); }
+  });
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    clearTimeout(debounce);
+    if (!refresh()) return;
+    const next = hist.reduce((mx, h) => Math.max(mx, parseInt(String(h.folio).replace(/\D/g, ''), 10) || 0), 0) + 1;
+    const folio = 'FA-' + String(next).padStart(4, '0');
+    hist.unshift({ folio, creado: new Date().toISOString(), p: P, total: Q.total, viajes: Q.viajes });
+    saveHist(); renderHist();
+    play();
+    if (window.matchMedia('(max-width: 980px)').matches) mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+
+  $('#playBtn').addEventListener('click', () => (sim.playing ? pause() : play()));
+  $('#resetBtn').addEventListener('click', () => { sim.t = 0; pause(); shownEvents = -1; dirty = true; });
+  $('#scrub').addEventListener('input', (e) => { sim.t = (+e.target.value / 1000) * sim.end; pause(); dirty = true; });
+  document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
+    sim.mode = b.dataset.mode;
+    document.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  }));
+
+  $('#copyBtn').addEventListener('click', async () => {
+    if (!P) return;
+    const btn = $('#copyBtn');
+    const text = summaryText(hist[0] && hist[0].p === P ? hist[0].folio : '');
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+      ta.remove();
+    }
+    btn.textContent = ok ? 'Copiado' : 'No se pudo copiar';
+    setTimeout(() => { btn.textContent = 'Copiar resumen'; }, 1800);
+  });
+
+  // Tema
+  function retheme() { readTokens(); terrainDirty = dirty = true; }
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', retheme);
+  new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; });
+
+  // Arranque con el flete de ejemplo
+  readTokens();
+  fillForm(SAMPLE);
+  new ResizeObserver(resize).observe(mapEl);
+  resize();
+  refresh();
+  renderHist();
+  requestAnimationFrame(loop);
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) play();
+  else { sim.t = TL ? TL.total * 0.45 : 0; dirty = true; }
+})();
+</script>
+</body>
+</html>
